@@ -119,3 +119,7 @@ module.exports = async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 };
+
+// a multi-part vision response can take a while to generate - default Vercel function
+// timeouts (especially on the Hobby plan) can be shorter than that, so extend it explicitly
+module.exports.config = { maxDuration: 60 };
