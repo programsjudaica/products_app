@@ -1009,16 +1009,12 @@ function render(){
   }
   document.getElementById('sketchToolsBox').style.display = aiSketchParts ? 'block' : 'none';
   if(aiSketchParts) renderPartSelector();
-  /* once an AI sketch exists, TOP/BOTTOM must never silently fall back to the generic
-     box+slot shape (it would contradict whatever FRONT actually shows) - show an honest
-     "no data from the photo" placeholder instead, unless the object is round (circleDiameter) */
-  const topBottomUnavailable = !!(aiSketchParts && !circleDiameter);
 
   const views = document.getElementById('viewsGrid');
   views.innerHTML = '';
   const specs = [
-    {label:'TOP', html: topBottomView({W:d.W,D:d.D,radius:Math.min(d.radius,d.D/2-1),color:s.color,texture:s.texture,mode:'top',hasSlot:s.hasSlot,slotW:d.slotW,slotH:d.slotH,slotOffsetX:s.slotOffsetX,slotOffsetY:s.slotOffsetY,circleDiameter,unavailable:topBottomUnavailable,dims:circleDiameter?{}:{W:s.W,D:s.D,slotW:s.slotW,slotOffsetX:s.slotOffsetX,slotOffsetY:s.slotOffsetY}})},
-    {label:'BOTTOM', html: topBottomView({W:d.W,D:d.D,radius:Math.min(d.radius,d.D/2-1),color:s.color,texture:s.texture,mode:'bottom',hasCork:s.hasCork,cork:d.cork,corkOffsetX:s.corkOffsetX,corkOffsetY:s.corkOffsetY,circleDiameter,unavailable:topBottomUnavailable,dims:{W:null,D:null,cork:s.cork,corkOffsetX:s.corkOffsetX,corkOffsetY:s.corkOffsetY}})},
+    {label:'TOP', html: topBottomView({W:d.W,D:d.D,radius:Math.min(d.radius,d.D/2-1),color:s.color,texture:s.texture,mode:'top',hasSlot:s.hasSlot,slotW:d.slotW,slotH:d.slotH,slotOffsetX:s.slotOffsetX,slotOffsetY:s.slotOffsetY,circleDiameter,dims:circleDiameter?{}:{W:s.W,D:s.D,slotW:s.slotW,slotOffsetX:s.slotOffsetX,slotOffsetY:s.slotOffsetY}})},
+    {label:'BOTTOM', html: topBottomView({W:d.W,D:d.D,radius:Math.min(d.radius,d.D/2-1),color:s.color,texture:s.texture,mode:'bottom',hasCork:s.hasCork,cork:d.cork,corkOffsetX:s.corkOffsetX,corkOffsetY:s.corkOffsetY,circleDiameter,dims:{W:null,D:null,cork:s.cork,corkOffsetX:s.corkOffsetX,corkOffsetY:s.corkOffsetY}})},
     {label:'FRONT', html: frontLikeView({W:d.W,H:d.H,radius:d.radius,color:s.color,texture:s.texture,ribZone,showRibs:!aiSketchParts,curvedLine:!aiSketchParts,text:s.text,font:s.font,fontsize:s.fontsize,letterspacing:s.letterspacing,strokew:s.strokew,dims:aiSketchParts?{}:{W:s.W,H:s.H},label:'',
       bgImage: (s.showRefBg && refImages[0]) ? refImages[0] : null, bgOpacity: s.refOpacity,
       textOffsetX:s.textOffsetX, textOffsetY:s.textOffsetY, textVectorData:textVector,
