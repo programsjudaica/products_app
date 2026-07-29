@@ -6,6 +6,8 @@ let customMaterials = []; // {id, name, baseType, density, opacity} - user-defin
 let primaryImageAspect = null; // width/height ratio detected from first uploaded image
 let bboxDetectionFailed = false;
 let textVector = null; // {viewBox, inner} parsed from an uploaded Illustrator SVG export
+let aiSketchPoints = null; // [{x,y}, ...] in the front view's local mm coordinate space (margin-relative) - AI-suggested, then hand-edited
+let draggingPointIndex = null;
 
 function updateAspectSuggestion(){
   const box = document.getElementById('aspectSuggest');
@@ -97,6 +99,117 @@ async function autoAnalyze(){
   } catch(e){
     banner.textContent = 'ניתוח אוטומטי לא זמין כרגע (השרת עדיין לא מחובר) - אפשר להמשיך עם ההעלאה הידנית של JSON למעלה.';
   }
+}
+
+/* parses a straight-line-only "M x,y L x,y ... Z" path into an ordered point array.
+   The AI sketch endpoint is constrained (by its own prompt) to only ever emit M/L/Z,
+   specifically so this simple parser is sufficient - no curve math needed. */
+function parseStraightLinePath(d){
+  const points = [];
+  const re = /[ML]\s*(-?[\d.]+)[,\s]+(-?[\d.]+)/gi;
+  let m;
+  while((m = re.exec(d)) !== null){
+    points.push({ x: parseFloat(m[1]), y: parseFloat(m[2]) });
+  }
+  return points;
+}
+
+function pointsToPath(points){
+  if(!points || points.length === 0) return '';
+  return 'M ' + points.map(p => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' L ') + ' Z';
+}
+
+async function generateAiSketch(){
+  const status = document.getElementById('sketchStatus');
+  const H = num('d_H'), W = num('d_W');
+  if(!H || !W){
+    status.textContent = 'קודם צריך למלא גובה ורוחב ב"מידות כלליות" למעלה - בלעדיהם אין קנה מידה לסקיצה.';
+    return;
+  }
+  if(refImages.length === 0){
+    status.textContent = 'קודם צריך להעלות לפחות תמונת רפרנס אחת.';
+    return;
+  }
+  status.textContent = '🤖 משרטטת סקיצה ראשונית...';
+  try {
+    const resp = await fetch('/api/sketch', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ images: refImages })
+    });
+    if(!resp.ok){
+      let errMsg = resp.status;
+      try { const err = await resp.json(); if(err.error) errMsg = err.error; } catch(e){}
+      status.textContent = `הסקיצה האוטומטית לא זמינה כרגע (${errMsg}).`;
+      return;
+    }
+    const data = await resp.json();
+    const normPoints = parseStraightLinePath(data.front_path);
+    if(normPoints.length < 3){
+      status.textContent = 'ה-AI לא החזיר צורה תקינה - אפשר לנסות שוב או להמשיך עם הצורה הבסיסית.';
+      return;
+    }
+    const margin = 16;
+    aiSketchPoints = normPoints.map(p => ({
+      x: margin + (p.x/100) * W,
+      y: margin + (p.y/100) * H
+    }));
+    let msg = data.confidence ? `🤖 סקיצה נוצרה (רמת ביטחון: ${data.confidence}).` : '🤖 סקיצה נוצרה.';
+    if(data.notes) msg += ` ${data.notes}`;
+    if(data.questions && data.questions.length) msg += ` שאלות מה-AI: ${data.questions.join(' | ')}`;
+    msg += ' גררי את הנקודות על תצוגת ה-Front כדי לדייק.';
+    status.textContent = msg;
+    document.getElementById('btnResetSketch').style.display = 'block';
+    render();
+  } catch(e){
+    status.textContent = 'הסקיצה האוטומטית לא זמינה כרגע (השרת עדיין לא מחובר).';
+  }
+}
+
+/* draggable point-editor overlaid on the AI-suggested front silhouette - lets the designer
+   nudge the rough sketch into an accurate shape without needing Illustrator */
+function attachSketchHandles(){
+  const svg = document.getElementById('frontOutlinePath');
+  if(!svg || !aiSketchPoints) return;
+  const svgRoot = svg.ownerSVGElement;
+  if(!svgRoot) return;
+
+  aiSketchPoints.forEach((pt, i) => {
+    const handle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    handle.setAttribute('cx', pt.x);
+    handle.setAttribute('cy', pt.y);
+    handle.setAttribute('r', 2.2);
+    handle.setAttribute('fill', '#8a7a5c');
+    handle.setAttribute('stroke', '#fff');
+    handle.setAttribute('stroke-width', '0.5');
+    handle.style.cursor = 'grab';
+    handle.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      draggingPointIndex = i;
+      const onMove = (ev) => {
+        if(draggingPointIndex === null) return;
+        const pointInSvg = svgRoot.createSVGPoint();
+        pointInSvg.x = ev.clientX; pointInSvg.y = ev.clientY;
+        const ctm = svgRoot.getScreenCTM();
+        if(!ctm) return;
+        const local = pointInSvg.matrixTransform(ctm.inverse());
+        aiSketchPoints[draggingPointIndex].x = local.x;
+        aiSketchPoints[draggingPointIndex].y = local.y;
+        handle.setAttribute('cx', local.x);
+        handle.setAttribute('cy', local.y);
+        svg.setAttribute('d', pointsToPath(aiSketchPoints));
+      };
+      const onUp = () => {
+        draggingPointIndex = null;
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        render();
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+    svgRoot.appendChild(handle);
+  });
 }
 
 function num(id){
@@ -322,11 +435,12 @@ function svgWrap(vbW, vbH, inner){
   return `<svg viewBox="0 0 ${vbW} ${vbH}" xmlns="http://www.w3.org/2000/svg">${inner}</svg>`;
 }
 
-function frontLikeView({W,H,radius,color,texture,ribZone,showRibs,text,font,fontsize,letterspacing,strokew,dims,curvedLine,label,bgImage,bgOpacity,textOffsetX,textOffsetY,textVectorData,textStyle,textColor}){
+function frontLikeView({W,H,radius,color,texture,ribZone,showRibs,text,font,fontsize,letterspacing,strokew,dims,curvedLine,label,bgImage,bgOpacity,textOffsetX,textOffsetY,textVectorData,textStyle,textColor,customOutlinePath,outlineId}){
   const margin = 16;
   const vbW = W + margin*2, vbH = H + margin*2;
   const x = margin, y = margin;
-  const path = roundedRectPath(x,y,W,H,radius);
+  const path = customOutlinePath || roundedRectPath(x,y,W,H,radius);
+  const outlineIdAttr = outlineId ? `id="${outlineId}"` : '';
   const cid = 'clip'+(clipCounter++);
   let refUnderlay = '';
   let shapeOpacity = 1;
@@ -389,7 +503,7 @@ function frontLikeView({W,H,radius,color,texture,ribZone,showRibs,text,font,font
   const inner = `
     <defs><clipPath id="${cid}"><path d="${path}"/></clipPath></defs>
     ${refUnderlay}
-    <path d="${path}" fill="${color}" fill-opacity="${shapeOpacity}" stroke="${darken(color,45)}" stroke-width="0.6"/>
+    <path ${outlineIdAttr} d="${path}" fill="${color}" fill-opacity="${shapeOpacity}" stroke="${darken(color,45)}" stroke-width="0.6"/>
     ${ribs}
     ${curve}
     ${textureOverlay(cid, path, texture, color)}
@@ -518,10 +632,12 @@ function render(){
   const specs = [
     {label:'TOP', html: topBottomView({W:d.W,D:d.D,radius:Math.min(d.radius,d.D/2-1),color:s.color,texture:s.texture,mode:'top',slotW:d.slotW,slotH:d.slotH,slotOffsetX:s.slotOffsetX,slotOffsetY:s.slotOffsetY,dims:{W:s.W,D:s.D,slotW:s.slotW,slotOffsetX:s.slotOffsetX,slotOffsetY:s.slotOffsetY}})},
     {label:'BOTTOM', html: topBottomView({W:d.W,D:d.D,radius:Math.min(d.radius,d.D/2-1),color:s.color,texture:s.texture,mode:'bottom',cork:d.cork,corkOffsetX:s.corkOffsetX,corkOffsetY:s.corkOffsetY,dims:{W:null,D:null,cork:s.cork,corkOffsetX:s.corkOffsetX,corkOffsetY:s.corkOffsetY}})},
-    {label:'FRONT', html: frontLikeView({W:d.W,H:d.H,radius:d.radius,color:s.color,texture:s.texture,ribZone,showRibs:true,curvedLine:true,text:s.text,font:s.font,fontsize:s.fontsize,letterspacing:s.letterspacing,strokew:s.strokew,dims:{W:s.W,H:s.H},label:'',
+    {label:'FRONT', html: frontLikeView({W:d.W,H:d.H,radius:d.radius,color:s.color,texture:s.texture,ribZone,showRibs:!aiSketchPoints,curvedLine:!aiSketchPoints,text:s.text,font:s.font,fontsize:s.fontsize,letterspacing:s.letterspacing,strokew:s.strokew,dims:aiSketchPoints?{}:{W:s.W,H:s.H},label:'',
       bgImage: (s.showRefBg && refImages[0]) ? refImages[0] : null, bgOpacity: s.refOpacity,
       textOffsetX:s.textOffsetX, textOffsetY:s.textOffsetY, textVectorData:textVector,
-      textStyle:s.textStyle, textColor:s.textColor})},
+      textStyle:s.textStyle, textColor:s.textColor,
+      customOutlinePath: aiSketchPoints ? pointsToPath(aiSketchPoints) : null,
+      outlineId: aiSketchPoints ? 'frontOutlinePath' : null})},
     {label:'BACK', html: frontLikeView({W:d.W,H:d.H,radius:d.radius,color:s.color,texture:s.texture,ribZone,showRibs:true,curvedLine:false,text:'',font:s.font,fontsize:s.fontsize,letterspacing:s.letterspacing,strokew:s.strokew,dims:{},label:''})},
     {label:'SIDE', html: sideView({D:d.D,H:d.H,radius:d.radius,color:s.color,texture:s.texture,dims:{D:s.D}})},
     {label:'SECTION', html: sectionView({W:d.W,H:d.H,wall:d.wall,bottom:d.bottom,color:s.color,dims:{wall:s.wall,bottom:s.bottom}})}
@@ -532,6 +648,7 @@ function render(){
     box.innerHTML = `<div class="label">${v.label}</div>${v.html}`;
     views.appendChild(box);
   });
+  if(aiSketchPoints) attachSketchHandles();
 
   const notesList = document.getElementById('notesList');
   const lines = s.notes.split('\n').map(l=>l.trim()).filter(Boolean);
@@ -680,6 +797,15 @@ document.addEventListener('DOMContentLoaded', ()=>{
     document.getElementById('f_textVector').value = '';
     document.getElementById('textVectorStatus').textContent = '';
     document.getElementById('btnClearTextVector').style.display = 'none';
+    render();
+  });
+
+  document.getElementById('btnGenSketch').addEventListener('click', generateAiSketch);
+
+  document.getElementById('btnResetSketch').addEventListener('click', ()=>{
+    aiSketchPoints = null;
+    document.getElementById('btnResetSketch').style.display = 'none';
+    document.getElementById('sketchStatus').textContent = '';
     render();
   });
 
