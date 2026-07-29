@@ -1,0 +1,6 @@
+{
+  "name": "spec-sheet-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Prototype: manufacturer technical spec-sheet generator for Judaica products"
+}

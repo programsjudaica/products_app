@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>מחולל מפרט טכני לספק - פרוטוטייפ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@400;500;700&family=Noto+Sans+Hebrew:wght@300;400;600;700&family=Assistant:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+
+  <aside class="panel">
+    <h1>מחולל מפרט טכני<br><span>פרוטוטייפ - משפחת "קופסה מעוגלת"</span></h1>
+
+    <section class="group ai-group">
+      <h2>ייבוא ניתוח AI (הדבקה ידנית)</h2>
+      <p class="hint">העלי את תמונת ההדמייה בשיחת Claude, בקשי ניתוח, הדביקי כאן את בלוק ה-JSON שתקבלי, ולחצי "החל הצעות".</p>
+      <textarea id="f_aiJson" rows="6" placeholder='{"material":"...","color_hex":"#e8e1d3","shape_family":"...","top_opening":{"present":true,"offsetX_hint":0,"offsetY_hint":20},"text_position":{"offsetX_hint":0,"offsetY_hint":20},"notes":"..."}'></textarea>
+      <button type="button" id="btnApplyAi" class="export-btn" style="position:static;margin-top:8px">החל הצעות מה-AI</button>
+      <div id="aiApplyStatus" class="hint" style="margin-top:6px"></div>
+    </section>
+
+    <section class="group">
+      <h2>זיהוי מוצר</h2>
+      <label>קוד מוצר <input type="text" id="f_code" placeholder="UK82437" value="UK82437"></label>
+      <label>שם/כותרת <input type="text" id="f_title" placeholder="POLYRESIN CHARITY BOX" value="POLYRESIN CHARITY BOX"></label>
+      <label>קטגוריה <input type="text" id="f_category" placeholder="קופות צדקה" value="קופות צדקה"></label>
+      <div class="row">
+        <label>REV <input type="text" id="f_rev" value="01" style="width:4em"></label>
+        <label>תאריך <input type="date" id="f_date"></label>
+      </div>
+    </section>
+
+    <section class="group">
+      <h2>חומר, צבע וטקסטורה</h2>
+      <label>חומר <input type="text" id="f_material" placeholder="Polyresin" value="Polyresin"></label>
+      <label>צבע <input type="color" id="f_color" value="#e8e1d3"></label>
+      <label>תיאור צבע <input type="text" id="f_colorname" placeholder="warm ivory / stone tone" value="warm ivory / stone tone"></label>
+      <label>טקסטורה
+        <select id="f_texture">
+          <option value="ribs" selected>צלעות (ribs)</option>
+          <option value="stone">אבן/לבנים (ירושלמי)</option>
+          <option value="crystal">קריסטל</option>
+          <option value="concrete">בטון מחוספס</option>
+          <option value="glass">זכוכית</option>
+          <option value="wood">עץ</option>
+          <option value="leather">עור</option>
+          <option value="none">ללא (חלק)</option>
+        </select>
+      </label>
+      <hr style="border:none;border-top:1px solid var(--line);margin:10px 0">
+      <p class="hint">חומר/טקסטורה לא ברשימה? הוסיפי אחת חדשה - היא תופיע בבורר למעלה</p>
+      <label>שם החומר החדש <input type="text" id="cm_name" placeholder="לדוגמה: קרמיקה מנוקדת"></label>
+      <label>דפוס בסיס
+        <select id="cm_baseType">
+          <option value="lines">קווים אלכסוניים</option>
+          <option value="dots">נקודות</option>
+          <option value="grid">משבצות/לבנים</option>
+          <option value="flat">חלק/מט (ללא דפוס)</option>
+        </select>
+      </label>
+      <div class="row3">
+        <label>צפיפות <input type="number" id="cm_density" value="8" min="2" max="60"></label>
+        <label>שקיפות דפוס <input type="number" id="cm_opacity" value="0.3" min="0.05" max="1" step="0.05"></label>
+      </div>
+      <button type="button" id="btnAddMaterial" class="secondary-btn">הוסף חומר לרשימה</button>
+      <div id="customMaterialsList" class="custom-materials-list"></div>
+    </section>
+
+    <section class="group">
+      <h2>מידות כלליות (מ"מ) - הכל אופציונלי</h2>
+      <p class="hint">שדה ריק = לא יוצג קו מידה, הספק יחליט</p>
+      <div class="row3">
+        <label>גובה H <input type="number" id="d_H" placeholder="140"></label>
+        <label>רוחב W <input type="number" id="d_W" placeholder="102"></label>
+        <label>עומק D <input type="number" id="d_D" placeholder="62"></label>
+      </div>
+      <div class="row3">
+        <label>עובי דופן <input type="number" id="d_wall" placeholder="2"></label>
+        <label>רדיוס פינה <input type="number" id="d_radius" placeholder="6"></label>
+        <label>עובי בסיס <input type="number" id="d_bottom" placeholder="3"></label>
+      </div>
+      <h3>חריץ עליון</h3>
+      <div class="row3">
+        <label>רוחב חריץ <input type="number" id="d_slotW" placeholder="50"></label>
+        <label>גובה חריץ <input type="number" id="d_slotH" placeholder="7"></label>
+      </div>
+      <p class="hint">מיקום החריץ (ריק = ברירת מחדל ממורכזת)</p>
+      <div class="row3">
+        <label>היסט אופקי מהמרכז <input type="number" id="d_slotOffsetX" placeholder="0"></label>
+        <label>מרחק מהקצה הקדמי <input type="number" id="d_slotOffsetY" placeholder="20"></label>
+      </div>
+      <h3>פתח תחתון (פקק)</h3>
+      <div class="row3">
+        <label>קוטר פתח <input type="number" id="d_cork" placeholder="34"></label>
+        <label>הערת פתח <input type="text" id="d_corkNote" placeholder="same as UK81358"></label>
+      </div>
+      <p class="hint">מיקום הפתח (ריק = ברירת מחדל ממורכזת)</p>
+      <div class="row3">
+        <label>היסט X מהמרכז <input type="number" id="d_corkOffsetX" placeholder="0"></label>
+        <label>היסט Y מהמרכז <input type="number" id="d_corkOffsetY" placeholder="0"></label>
+      </div>
+    </section>
+
+    <section class="group">
+      <h2>כיתוב</h2>
+      <label>טקסט (עברית) <input type="text" id="f_text" dir="rtl" value="צדקה"></label>
+      <label>סגנון כיתוב
+        <select id="f_textStyle">
+          <option value="engraved" selected>חרוט פנימה (tone-on-tone)</option>
+          <option value="embossed">בולט/מוגבה (raised, בצבע שונה)</option>
+        </select>
+      </label>
+      <label>פונט
+        <select id="f_font">
+          <option value="'Frank Ruhl Libre', serif">Frank Ruhl Libre</option>
+          <option value="'Noto Sans Hebrew', sans-serif">Noto Sans Hebrew</option>
+          <option value="'Assistant', sans-serif">Assistant</option>
+        </select>
+      </label>
+      <div class="row3">
+        <label>גודל (מ"מ) <input type="number" id="f_fontsize" value="9"></label>
+        <label>ריווח אותיות <input type="number" id="f_letterspacing" value="0" step="0.1"></label>
+        <label>עובי קו חריטה <input type="number" id="f_strokew" value="0.4" step="0.1"></label>
+      </div>
+      <label>צבע כיתוב בולט (רלוונטי רק לסגנון "בולט") <input type="color" id="f_textColor" value="#b8862e"></label>
+      <p class="hint">מיקום הכיתוב (ריק = ברירת מחדל - ממורכז, קרוב לתחתית)</p>
+      <div class="row3">
+        <label>היסט אופקי מהמרכז <input type="number" id="f_textOffsetX" placeholder="0"></label>
+        <label>מרחק מהקצה התחתון <input type="number" id="f_textOffsetY" placeholder=""></label>
+      </div>
+      <hr style="border:none;border-top:1px solid var(--line);margin:10px 0">
+      <label>וקטור טקסט מוכן (SVG מ-Illustrator) - אופציונלי, עוקף את הפונט
+        <input type="file" id="f_textVector" accept=".svg,image/svg+xml">
+      </label>
+      <div id="textVectorStatus" class="hint"></div>
+      <button type="button" id="btnClearTextVector" class="secondary-btn" style="display:none">הסר וקטור, חזור לטקסט מוקלד</button>
+    </section>
+
+    <section class="group">
+      <h2>תמונות רפרנס (AI render)</h2>
+      <p class="hint">עד 8 תמונות - קדמי / אחורי / צד / תקריב טקסטורה. כל התמונות שמעלים נשלחות יחד לניתוח ה-AI (כשמחובר), לא רק הראשונה.</p>
+      <input type="file" id="f_images" accept="image/*" multiple>
+      <div id="imgPreviewList" class="img-preview-list"></div>
+      <div id="aiAutoStatus" class="ai-auto-banner" style="display:none"></div>
+      <div id="aspectSuggest" class="hint" style="margin-top:8px"></div>
+      <label class="checkline"><input type="checkbox" id="f_showRefBg"> הצג את התמונה כרקע שקוף בתצוגת Front להתאמת הצורה</label>
+      <label>שקיפות רקע ההתאמה <input type="range" id="f_refOpacity" min="0" max="1" step="0.05" value="0.35"></label>
+    </section>
+
+    <section class="group">
+      <h2>הערות ייצור</h2>
+      <textarea id="f_notes" rows="10">Overall dimensions: 140 H x 102 W x 62 D mm.
+Material: molded polyresin.
+Entire product in one uniform warm ivory / stone color.
+No gold electroforming, metal insert, foil or painted gold.
+Fine vertical rib texture only on side zones and rounded corners.
+Front and back center panels remain smooth.
+Curved front transition is a very shallow separation between surfaces; it should be minimally visible and must not form a deep groove.
+Hebrew text is engraved inward, centered and tone-on-tone.
+Top coin slot: 50 x 7 mm.
+Bottom opening and cork: same construction as UK81358, 42 mm.
+Supplier to confirm draft angles, shrinkage allowance and final wall thickness before tooling.
+All edges and corners to be softly rounded; no sharp edges.</textarea>
+    </section>
+
+    <button id="btnExport" class="export-btn">ייצוא PDF (הדפסה)</button>
+  </aside>
+
+  <main class="preview-wrap">
+    <div id="specSheet" class="spec-sheet">
+      <!-- נבנה דינמית ע"י app.js -->
+    </div>
+  </main>
+
+</div>
+<script src="app.js"></script>
+</body>
+</html>
