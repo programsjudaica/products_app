@@ -71,7 +71,7 @@ module.exports = async (req, res) => {
         'content-type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-5',
+        model: 'claude-opus-4-8',
         max_tokens: 4096,
         system: SYSTEM_PROMPT,
         messages: [{
@@ -122,4 +122,4 @@ module.exports = async (req, res) => {
 
 // a multi-part vision response can take a while to generate - default Vercel function
 // timeouts (especially on the Hobby plan) can be shorter than that, so extend it explicitly
-module.exports.config = { maxDuration: 60 };
+module.exports.config = { maxDuration: 30 };
