@@ -1,20 +1,35 @@
 // Vercel serverless function: POST { images: [dataURL, ...] } -> a normalized (0-100 x 0-100)
-// straight-line silhouette trace of the product's front-facing view, for the app to scale
-// into real mm using the designer-entered height/width. Never asked to guess real dimensions -
-// only proportional shape. The designer edits the resulting points afterward (draggable in the UI).
+// multi-part straight-line silhouette trace, for the app to scale into real mm using the
+// designer-entered height/width. Never asked to guess real dimensions - only proportional
+// shape. The designer edits the resulting points afterward (draggable in the UI).
+//
+// Split into parts (not one blob) because many products are physically multiple pieces -
+// a kiddush cup with its own matching saucer, a besamim tower with a separate lid, a knife
+// with a stand - and forcing that into a single closed polygon produces a shape that
+// resembles neither piece.
 
-const SYSTEM_PROMPT = `You look at product photos and trace the visible front-facing silhouette as a simple polygon.
+const SYSTEM_PROMPT = `You look at product photos and trace the visible front-facing silhouette(s) as one or more simple polygons - one polygon per physically distinct piece.
 
 Respond with ONLY a JSON object, no markdown fences, no extra text:
 
 {
-  "front_path": "SVG path 'd' string using ONLY M, L and Z commands (straight line segments, no curves), in a normalized 0-100 x 0-100 coordinate box where (0,0) is top-left and (100,100) is bottom-right of the product's front-facing bounding box. Trace the outer silhouette only - 6 to 16 points is usually enough. Close the path with Z.",
+  "parts": [
+    {
+      "name": "short label for this piece, e.g. 'cup', 'saucer', 'lid', 'stand'",
+      "path": "SVG path 'd' string using ONLY M, L and Z commands (straight line segments, no curves). All parts share ONE common normalized 0-100 x 0-100 coordinate box representing the combined product's overall front-facing bounding box exactly as photographed, so parts stay correctly positioned relative to each other (e.g. a saucer stays under its cup). Trace the outer silhouette of just this one piece. 4 to 16 points is usually enough. Close with Z.",
+      "primary": true or false
+    }
+  ],
   "confidence": "high" | "medium" | "low",
-  "questions": ["short clarifying questions about anything structurally ambiguous that isn't visible in the photos - empty array if none"],
+  "questions": ["short clarifying questions about anything structurally ambiguous or ambiguous about which parts should be included - empty array if none"],
   "notes": "one sentence on what angle/photo you traced from and any uncertainty"
 }
 
-Only trace what is actually visible. If the photos don't show the product's own front face clearly (e.g. only a lifestyle/angled shot), say so in notes and lower confidence rather than inventing a silhouette. Never output curves (C/Q/A/S commands) - approximate any curved edges with several short straight segments instead.`;
+Rules:
+- If the product is one single piece, return exactly one entry in "parts".
+- If it's multiple distinct physical pieces (e.g. a goblet + its separate saucer), return one part per piece, each with its own name. Mark the main/central piece "primary": true and accessories "primary": false.
+- Only trace what is actually visible. If the photos don't show the product's own front face clearly, say so in notes and lower confidence rather than inventing a silhouette.
+- Never output curves (C/Q/A/S commands) - approximate any curved edges with several short straight segments instead.`;
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -55,11 +70,11 @@ module.exports = async (req, res) => {
       },
       body: JSON.stringify({
         model: 'claude-sonnet-5',
-        max_tokens: 1024,
+        max_tokens: 1536,
         system: SYSTEM_PROMPT,
         messages: [{
           role: 'user',
-          content: [...imageBlocks, { type: 'text', text: 'Trace the front-facing silhouette and return the JSON object described in the system prompt.' }]
+          content: [...imageBlocks, { type: 'text', text: 'Trace the front-facing silhouette(s), one polygon per physical piece, and return the JSON object described in the system prompt.' }]
         }]
       })
     });
@@ -81,10 +96,16 @@ module.exports = async (req, res) => {
     try { parsed = JSON.parse(jsonMatch[0]); }
     catch (e) { res.status(502).json({ error: 'Could not parse model JSON', raw: text }); return; }
 
-    if (!parsed.front_path || !/^[ML][\s\S]*Z$/i.test(parsed.front_path.trim())) {
-      res.status(502).json({ error: 'Model returned an unusable path', raw: parsed });
+    if (!Array.isArray(parsed.parts) || parsed.parts.length === 0) {
+      res.status(502).json({ error: 'Model returned no parts', raw: parsed });
       return;
     }
+    const validParts = parsed.parts.filter(p => p && typeof p.path === 'string' && /^[ML][\s\S]*Z$/i.test(p.path.trim()));
+    if (validParts.length === 0) {
+      res.status(502).json({ error: 'Model returned no usable paths', raw: parsed });
+      return;
+    }
+    parsed.parts = validParts;
 
     res.status(200).json(parsed);
   } catch (e) {

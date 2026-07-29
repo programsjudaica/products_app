@@ -6,12 +6,19 @@ let customMaterials = []; // {id, name, baseType, density, opacity} - user-defin
 let primaryImageAspect = null; // width/height ratio detected from first uploaded image
 let bboxDetectionFailed = false;
 let textVector = null; // {viewBox, inner} parsed from an uploaded Illustrator SVG export
-let aiSketchPoints = null; // [{x,y}, ...] in the front view's local mm coordinate space (margin-relative) - AI-suggested, then hand-edited
-let draggingPointIndex = null;
-let symmetricMode = false; // when true, aiSketchPoints holds only the right half - the left half is always mirrored at render time, never stored
-let symmetryAxisX = null;
+
+/* aiSketchParts: [{id, name, primary, visible, points:[{x,y},...], symmetric, axisX}, ...]
+   Multiple parts because many products are physically several pieces (a kiddush cup + its
+   own saucer, a besamim tower + lid) - forcing that into one polygon looks wrong. All parts
+   share the same front-view mm coordinate space, so their relative position stays correct. */
+let aiSketchParts = null;
+let activePartId = null;
+let draggingRef = null; // {partId, index}
 let distanceLockModeOn = false;
-let selectedPointIndices = []; // up to 2 indices into aiSketchPoints, for the distance-lock tool
+let selectedPointRefs = []; // [{partId, index}, ...] max 2, must be same part
+
+function getPart(partId){ return aiSketchParts ? aiSketchParts.find(p => p.id === partId) : null; }
+function getActivePart(){ return getPart(activePartId); }
 
 /* mirrors a right-half point profile across a vertical axis into a full closed polygon.
    Nothing about the left half is ever stored - it's always derived, so it's structurally
@@ -22,23 +29,36 @@ function buildSymmetricFullPoints(rightPoints, axisX){
   return [...rightPoints, ...mirrored];
 }
 
-function convertToSymmetric(){
-  if(!aiSketchPoints || aiSketchPoints.length < 3) return;
-  const xs = aiSketchPoints.map(p => p.x);
+function fullPointsForPart(part){
+  return part.symmetric ? buildSymmetricFullPoints(part.points, part.axisX) : part.points;
+}
+
+/* the full multi-subpath outline for every visible part, as a single SVG "d" string
+   (SVG paths natively support several "M...Z" subpaths in one d attribute) */
+function combinedSketchPathD(){
+  if(!aiSketchParts) return null;
+  const visible = aiSketchParts.filter(p => p.visible);
+  if(visible.length === 0) return null;
+  return visible.map(p => pointsToPath(fullPointsForPart(p))).join(' ');
+}
+
+function convertPartToSymmetric(part){
+  if(!part || part.points.length < 3) return;
+  const xs = part.points.map(p => p.x);
   const axisX = (Math.min(...xs) + Math.max(...xs)) / 2;
-  let right = aiSketchPoints.filter(p => p.x >= axisX);
-  if(right.length < 2) right = aiSketchPoints.slice();
+  let right = part.points.filter(p => p.x >= axisX);
+  if(right.length < 2) right = part.points.slice();
   right.sort((a,b) => a.y - b.y);
   right[0] = { ...right[0], x: axisX };
   right[right.length-1] = { ...right[right.length-1], x: axisX };
-  aiSketchPoints = right;
-  symmetryAxisX = axisX;
-  symmetricMode = true;
+  part.points = right;
+  part.axisX = axisX;
+  part.symmetric = true;
 }
 
-/* uniform scale of the whole point set around one anchor point - used by the distance-lock
-   tool: pick two points, say what the real mm distance between them should be, everything
-   rescales proportionally around the first point. */
+/* uniform scale of a part's point set around one anchor point - used by the distance-lock
+   tool: pick two points in the SAME part, say what the real mm distance between them should
+   be, everything in that part rescales proportionally around the first point. */
 function applyDistanceLock(pointsArr, idxA, idxB, desiredMm){
   const a = pointsArr[idxA], b = pointsArr[idxB];
   const currentDist = Math.hypot(b.x-a.x, b.y-a.y);
@@ -54,19 +74,25 @@ function updateDistanceLockStatus(){
   const box = document.getElementById('distanceLockStatus');
   if(!box) return;
   if(!distanceLockModeOn){ box.innerHTML = ''; return; }
-  if(selectedPointIndices.length < 2){
-    box.textContent = `מצב נעילת מרחק פעיל - לחצי על שתי נקודות בתצוגת Front (נבחרו ${selectedPointIndices.length}/2).`;
+  if(selectedPointRefs.length < 2){
+    box.textContent = `מצב נעילת מרחק פעיל - לחצי על שתי נקודות **באותו חלק** בתצוגת Front (נבחרו ${selectedPointRefs.length}/2).`;
     return;
   }
-  const [ia, ib] = selectedPointIndices;
-  const a = aiSketchPoints[ia], b = aiSketchPoints[ib];
+  const [refA, refB] = selectedPointRefs;
+  if(refA.partId !== refB.partId){
+    box.textContent = 'אפשר לנעול מרחק רק בין שתי נקודות באותו חלק (לא בין חלקים שונים). בחרי שוב.';
+    selectedPointRefs = [];
+    return;
+  }
+  const part = getPart(refA.partId);
+  const a = part.points[refA.index], b = part.points[refB.index];
   const currentMm = Math.hypot(b.x-a.x, b.y-a.y).toFixed(1);
-  box.innerHTML = `מרחק נוכחי בין הנקודות שנבחרו: ${currentMm}מ"מ. מרחק אמיתי (מ"מ): <input type="number" id="distanceLockValue" style="width:5em"> <button type="button" id="btnApplyDistanceLock">החל</button>`;
+  box.innerHTML = `מרחק נוכחי (בחלק "${part.name}"): ${currentMm}מ"מ. מרחק אמיתי (מ"מ): <input type="number" id="distanceLockValue" style="width:5em"> <button type="button" id="btnApplyDistanceLock">החל</button>`;
   document.getElementById('btnApplyDistanceLock').addEventListener('click', ()=>{
     const val = parseFloat(document.getElementById('distanceLockValue').value);
     if(!val || val <= 0) return;
-    applyDistanceLock(aiSketchPoints, ia, ib, val);
-    selectedPointIndices = [];
+    applyDistanceLock(part.points, refA.index, refB.index, val);
+    selectedPointRefs = [];
     distanceLockModeOn = false;
     document.getElementById('btnDistanceLockMode').textContent = 'מצב נעילת מרחק מדויק בין שתי נקודות';
     render();
@@ -208,22 +234,37 @@ async function generateAiSketch(){
       return;
     }
     const data = await resp.json();
-    const normPoints = parseStraightLinePath(data.front_path);
-    if(normPoints.length < 3){
+    if(!Array.isArray(data.parts) || data.parts.length === 0){
       status.textContent = 'ה-AI לא החזיר צורה תקינה - אפשר לנסות שוב או להמשיך עם הצורה הבסיסית.';
       return;
     }
     const margin = 16;
-    aiSketchPoints = normPoints.map(p => ({
-      x: margin + (p.x/100) * W,
-      y: margin + (p.y/100) * H
-    }));
-    let msg = data.confidence ? `🤖 סקיצה נוצרה (רמת ביטחון: ${data.confidence}).` : '🤖 סקיצה נוצרה.';
+    const parts = [];
+    data.parts.forEach((p, i) => {
+      const normPoints = parseStraightLinePath(p.path);
+      if(normPoints.length < 3) return;
+      parts.push({
+        id: 'part' + Date.now() + '_' + i,
+        name: p.name || `חלק ${i+1}`,
+        primary: !!p.primary,
+        visible: true,
+        symmetric: false,
+        axisX: null,
+        points: normPoints.map(pt => ({ x: margin + (pt.x/100) * W, y: margin + (pt.y/100) * H }))
+      });
+    });
+    if(parts.length === 0){
+      status.textContent = 'ה-AI לא החזיר צורה תקינה - אפשר לנסות שוב או להמשיך עם הצורה הבסיסית.';
+      return;
+    }
+    aiSketchParts = parts;
+    activePartId = (parts.find(p => p.primary) || parts[0]).id;
+
+    let msg = data.confidence ? `🤖 סקיצה נוצרה (רמת ביטחון: ${data.confidence}), ${parts.length} חלק/ים: ${parts.map(p=>p.name).join(', ')}.` : `🤖 סקיצה נוצרה, ${parts.length} חלק/ים.`;
     if(data.notes) msg += ` ${data.notes}`;
     if(data.questions && data.questions.length) msg += ` שאלות מה-AI: ${data.questions.join(' | ')}`;
-    msg += ' גררי את הנקודות על תצוגת ה-Front כדי לדייק.';
+    msg += ' בחרי חלק לעריכה למטה וגררי את הנקודות שלו על תצוגת ה-Front כדי לדייק.';
     status.textContent = msg;
-    symmetricMode = false; symmetryAxisX = null;
     render();
   } catch(e){
     status.textContent = 'הסקיצה האוטומטית לא זמינה כרגע (השרת עדיין לא מחובר).';
@@ -232,22 +273,45 @@ async function generateAiSketch(){
 
 /* draggable point-editor overlaid on the AI-suggested front silhouette - lets the designer
    nudge the rough sketch into an accurate shape without needing Illustrator */
-function currentSketchPathD(){
-  return symmetricMode ? pointsToPath(buildSymmetricFullPoints(aiSketchPoints, symmetryAxisX)) : pointsToPath(aiSketchPoints);
+/* only the active part's points get draggable handles (avoids clutter when there are
+   several parts) - the other parts still render their outline, just not editable right now */
+function renderPartSelector(){
+  const box = document.getElementById('partSelector');
+  if(!box || !aiSketchParts) return;
+  box.innerHTML = aiSketchParts.map(part => `
+    <div class="part-row ${part.id === activePartId ? 'active' : ''}">
+      <input type="radio" name="activePartRadio" data-part-id="${part.id}" ${part.id === activePartId ? 'checked' : ''}>
+      <span class="part-name">${part.name}${part.primary ? ' (עיקרי)' : ''}</span>
+      ${part.symmetric ? '<span class="sym-badge">סימטרי</span>' : ''}
+      <label><input type="checkbox" data-visible-part-id="${part.id}" ${part.visible ? 'checked' : ''}> כלול</label>
+    </div>
+  `).join('');
+  box.querySelectorAll('input[data-part-id]').forEach(el => {
+    el.addEventListener('change', () => { activePartId = el.getAttribute('data-part-id'); render(); });
+  });
+  box.querySelectorAll('input[data-visible-part-id]').forEach(el => {
+    el.addEventListener('change', () => {
+      const part = getPart(el.getAttribute('data-visible-part-id'));
+      if(part) part.visible = el.checked;
+      render();
+    });
+  });
 }
 
 function attachSketchHandles(){
   const svg = document.getElementById('frontOutlinePath');
-  if(!svg || !aiSketchPoints) return;
+  const part = getActivePart();
+  if(!svg || !part) return;
   const svgRoot = svg.ownerSVGElement;
   if(!svgRoot) return;
 
-  aiSketchPoints.forEach((pt, i) => {
+  part.points.forEach((pt, i) => {
+    const isSelected = selectedPointRefs.some(r => r.partId === part.id && r.index === i);
     const handle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     handle.setAttribute('cx', pt.x);
     handle.setAttribute('cy', pt.y);
     handle.setAttribute('r', 2.2);
-    handle.setAttribute('fill', selectedPointIndices.includes(i) ? '#c0392b' : '#8a7a5c');
+    handle.setAttribute('fill', isSelected ? '#c0392b' : '#8a7a5c');
     handle.setAttribute('stroke', '#fff');
     handle.setAttribute('stroke-width', '0.5');
     handle.style.cursor = distanceLockModeOn ? 'pointer' : 'grab';
@@ -256,33 +320,35 @@ function attachSketchHandles(){
       e.preventDefault();
 
       if(distanceLockModeOn){
-        if(selectedPointIndices.includes(i)){
-          selectedPointIndices = selectedPointIndices.filter(idx => idx !== i);
+        const ref = { partId: part.id, index: i };
+        const existingIdx = selectedPointRefs.findIndex(r => r.partId === ref.partId && r.index === ref.index);
+        if(existingIdx >= 0){
+          selectedPointRefs.splice(existingIdx, 1);
         } else {
-          selectedPointIndices.push(i);
-          if(selectedPointIndices.length > 2) selectedPointIndices.shift();
+          selectedPointRefs.push(ref);
+          if(selectedPointRefs.length > 2) selectedPointRefs.shift();
         }
         updateDistanceLockStatus();
         render();
         return;
       }
 
-      draggingPointIndex = i;
+      draggingRef = { partId: part.id, index: i };
       const onMove = (ev) => {
-        if(draggingPointIndex === null) return;
+        if(!draggingRef) return;
         const pointInSvg = svgRoot.createSVGPoint();
         pointInSvg.x = ev.clientX; pointInSvg.y = ev.clientY;
         const ctm = svgRoot.getScreenCTM();
         if(!ctm) return;
         const local = pointInSvg.matrixTransform(ctm.inverse());
-        aiSketchPoints[draggingPointIndex].x = local.x;
-        aiSketchPoints[draggingPointIndex].y = local.y;
+        part.points[draggingRef.index].x = local.x;
+        part.points[draggingRef.index].y = local.y;
         handle.setAttribute('cx', local.x);
         handle.setAttribute('cy', local.y);
-        svg.setAttribute('d', currentSketchPathD());
+        svg.setAttribute('d', combinedSketchPathD());
       };
       const onUp = () => {
-        draggingPointIndex = null;
+        draggingRef = null;
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
         render();
@@ -718,27 +784,29 @@ function render(){
   }
 
   const rotationalSymmetry = document.getElementById('f_rotationalSymmetry').checked;
-  const fullSketchPoints = aiSketchPoints ? (symmetricMode ? buildSymmetricFullPoints(aiSketchPoints, symmetryAxisX) : aiSketchPoints) : null;
-  const sketchPathD = fullSketchPoints ? pointsToPath(fullSketchPoints) : null;
+  const sketchPathD = combinedSketchPathD();
   let circleDiameter = null;
-  if(fullSketchPoints && rotationalSymmetry){
-    const xs = fullSketchPoints.map(p=>p.x);
+  if(sketchPathD && rotationalSymmetry){
+    const visibleParts = aiSketchParts.filter(p => p.visible);
+    const allPts = visibleParts.flatMap(p => fullPointsForPart(p));
+    const xs = allPts.map(p=>p.x);
     circleDiameter = Math.max(...xs) - Math.min(...xs);
   }
-  document.getElementById('sketchToolsBox').style.display = aiSketchPoints ? 'block' : 'none';
+  document.getElementById('sketchToolsBox').style.display = aiSketchParts ? 'block' : 'none';
+  if(aiSketchParts) renderPartSelector();
 
   const views = document.getElementById('viewsGrid');
   views.innerHTML = '';
   const specs = [
     {label:'TOP', html: topBottomView({W:d.W,D:d.D,radius:Math.min(d.radius,d.D/2-1),color:s.color,texture:s.texture,mode:'top',slotW:d.slotW,slotH:d.slotH,slotOffsetX:s.slotOffsetX,slotOffsetY:s.slotOffsetY,circleDiameter,dims:circleDiameter?{}:{W:s.W,D:s.D,slotW:s.slotW,slotOffsetX:s.slotOffsetX,slotOffsetY:s.slotOffsetY}})},
     {label:'BOTTOM', html: topBottomView({W:d.W,D:d.D,radius:Math.min(d.radius,d.D/2-1),color:s.color,texture:s.texture,mode:'bottom',cork:d.cork,corkOffsetX:s.corkOffsetX,corkOffsetY:s.corkOffsetY,circleDiameter,dims:{W:null,D:null,cork:s.cork,corkOffsetX:s.corkOffsetX,corkOffsetY:s.corkOffsetY}})},
-    {label:'FRONT', html: frontLikeView({W:d.W,H:d.H,radius:d.radius,color:s.color,texture:s.texture,ribZone,showRibs:!aiSketchPoints,curvedLine:!aiSketchPoints,text:s.text,font:s.font,fontsize:s.fontsize,letterspacing:s.letterspacing,strokew:s.strokew,dims:aiSketchPoints?{}:{W:s.W,H:s.H},label:'',
+    {label:'FRONT', html: frontLikeView({W:d.W,H:d.H,radius:d.radius,color:s.color,texture:s.texture,ribZone,showRibs:!aiSketchParts,curvedLine:!aiSketchParts,text:s.text,font:s.font,fontsize:s.fontsize,letterspacing:s.letterspacing,strokew:s.strokew,dims:aiSketchParts?{}:{W:s.W,H:s.H},label:'',
       bgImage: (s.showRefBg && refImages[0]) ? refImages[0] : null, bgOpacity: s.refOpacity,
       textOffsetX:s.textOffsetX, textOffsetY:s.textOffsetY, textVectorData:textVector,
       textStyle:s.textStyle, textColor:s.textColor,
       customOutlinePath: sketchPathD,
-      outlineId: aiSketchPoints ? 'frontOutlinePath' : null})},
-    {label:'BACK', html: frontLikeView({W:d.W,H:d.H,radius:d.radius,color:s.color,texture:s.texture,ribZone,showRibs:!aiSketchPoints,curvedLine:false,text:'',font:s.font,fontsize:s.fontsize,letterspacing:s.letterspacing,strokew:s.strokew,dims:{},customOutlinePath:sketchPathD,label:''})},
+      outlineId: aiSketchParts ? 'frontOutlinePath' : null})},
+    {label:'BACK', html: frontLikeView({W:d.W,H:d.H,radius:d.radius,color:s.color,texture:s.texture,ribZone,showRibs:!aiSketchParts,curvedLine:false,text:'',font:s.font,fontsize:s.fontsize,letterspacing:s.letterspacing,strokew:s.strokew,dims:{},customOutlinePath:sketchPathD,label:''})},
     {label:'SIDE', html: (rotationalSymmetry && sketchPathD)
       ? frontLikeView({W:d.W,H:d.H,radius:d.radius,color:s.color,texture:s.texture,ribZone,showRibs:false,curvedLine:false,text:'',font:s.font,fontsize:s.fontsize,letterspacing:s.letterspacing,strokew:s.strokew,dims:{},customOutlinePath:sketchPathD,label:''})
       : sideView({D:d.D,H:d.H,radius:d.radius,color:s.color,texture:s.texture,dims:{D:s.D}})},
@@ -750,7 +818,7 @@ function render(){
     box.innerHTML = `<div class="label">${v.label}</div>${v.html}`;
     views.appendChild(box);
   });
-  if(aiSketchPoints) attachSketchHandles();
+  if(aiSketchParts) attachSketchHandles();
 
   const notesList = document.getElementById('notesList');
   const lines = s.notes.split('\n').map(l=>l.trim()).filter(Boolean);
@@ -905,9 +973,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
   document.getElementById('btnGenSketch').addEventListener('click', generateAiSketch);
 
   document.getElementById('btnResetSketch').addEventListener('click', ()=>{
-    aiSketchPoints = null;
-    symmetricMode = false; symmetryAxisX = null;
-    distanceLockModeOn = false; selectedPointIndices = [];
+    aiSketchParts = null;
+    activePartId = null;
+    distanceLockModeOn = false; selectedPointRefs = [];
     document.getElementById('sketchStatus').textContent = '';
     document.getElementById('distanceLockStatus').textContent = '';
     document.getElementById('f_rotationalSymmetry').checked = false;
@@ -915,17 +983,19 @@ document.addEventListener('DOMContentLoaded', ()=>{
   });
 
   document.getElementById('btnMakeSymmetric').addEventListener('click', ()=>{
-    convertToSymmetric();
-    document.getElementById('sketchStatus').textContent = 'הצורה הפכה לסימטרית - גררי רק את הנקודות בצד ימין, השמאל יתעדכן אוטומטית.';
+    const part = getActivePart();
+    if(!part) return;
+    convertPartToSymmetric(part);
+    document.getElementById('sketchStatus').textContent = `החלק "${part.name}" הפך לסימטרי - גררי רק את הנקודות בצד ימין שלו, השמאל יתעדכן אוטומטית.`;
     render();
   });
 
   document.getElementById('btnDistanceLockMode').addEventListener('click', ()=>{
     distanceLockModeOn = !distanceLockModeOn;
-    selectedPointIndices = [];
+    selectedPointRefs = [];
     document.getElementById('btnDistanceLockMode').textContent = distanceLockModeOn
       ? 'בטל מצב נעילת מרחק'
-      : 'מצב נעילת מרחק מדויק בין שתי נקודות';
+      : 'מצב נעילת מרחק מדויק בין שתי נקודות (באותו חלק)';
     updateDistanceLockStatus();
     render();
   });

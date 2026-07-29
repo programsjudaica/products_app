@@ -155,12 +155,16 @@
 
       <div id="sketchToolsBox" style="display:none">
         <hr style="border:none;border-top:1px solid var(--line);margin:10px 0">
-        <button type="button" id="btnMakeSymmetric" class="secondary-btn">הצורה סימטרית (שמאל=ימין) - הפוך למחצית עם מראה</button>
-        <p class="hint">אחרי הפיכה לסימטרי, גוררים רק את חצי הנקודות הימני - הצד השמאלי מתעדכן אוטומטית כמראה, כך שהצורה תמיד נשארת מאוזנת.</p>
+        <p class="hint"><strong>חלקי המוצר</strong> - אם יש כמה חלקים (למשל כוס + צלוחית), בחרי איזה חלק לערוך, ואילו לכלול בשרטוט.</p>
+        <div id="partSelector"></div>
+
+        <hr style="border:none;border-top:1px solid var(--line);margin:10px 0">
+        <button type="button" id="btnMakeSymmetric" class="secondary-btn">הפוך את החלק הנבחר לסימטרי (שמאל=ימין)</button>
+        <p class="hint">אחרי הפיכה לסימטרי, גוררים רק את חצי הנקודות הימני של החלק - הצד השמאלי מתעדכן אוטומטית כמראה.</p>
 
         <label class="checkline"><input type="checkbox" id="f_rotationalSymmetry"> המוצר עגול/סובב-סימטרי (כמו גביע/פמוט) - Front=Side=Back, ו-Top/Bottom יוצגו כעיגול</label>
 
-        <button type="button" id="btnDistanceLockMode" class="secondary-btn">מצב נעילת מרחק מדויק בין שתי נקודות</button>
+        <button type="button" id="btnDistanceLockMode" class="secondary-btn">מצב נעילת מרחק מדויק בין שתי נקודות (באותו חלק)</button>
         <div id="distanceLockStatus" class="hint" style="margin-top:6px"></div>
 
         <button type="button" id="btnResetSketch" class="secondary-btn">בטל סקיצת AI, חזור לצורה הבסיסית</button>
