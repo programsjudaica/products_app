@@ -72,7 +72,7 @@ module.exports = async (req, res) => {
       },
       body: JSON.stringify({
         model: 'claude-sonnet-5',
-        max_tokens: 1536,
+        max_tokens: 4096,
         system: SYSTEM_PROMPT,
         messages: [{
           role: 'user',
@@ -90,13 +90,18 @@ module.exports = async (req, res) => {
     const text = (data.content && data.content[0] && data.content[0].text) || '';
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      res.status(502).json({ error: 'Model did not return valid JSON', raw: text });
+      const hint = data.stop_reason === 'max_tokens' ? ' (response was cut off - try fewer/simpler reference photos)' : '';
+      res.status(502).json({ error: 'Model did not return valid JSON' + hint, raw: text });
       return;
     }
 
     let parsed;
     try { parsed = JSON.parse(jsonMatch[0]); }
-    catch (e) { res.status(502).json({ error: 'Could not parse model JSON', raw: text }); return; }
+    catch (e) {
+      const hint = data.stop_reason === 'max_tokens' ? ' (response was cut off - try fewer/simpler reference photos)' : '';
+      res.status(502).json({ error: 'Could not parse model JSON' + hint, raw: text });
+      return;
+    }
 
     if (!Array.isArray(parsed.parts) || parsed.parts.length === 0) {
       res.status(502).json({ error: 'Model returned no parts', raw: parsed });
