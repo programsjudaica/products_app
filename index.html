@@ -153,8 +153,9 @@
       <label class="checkline"><input type="checkbox" id="f_showRefBg"> הצג את התמונה כרקע שקוף בתצוגת Front להתאמת הצורה</label>
       <label>שקיפות רקע ההתאמה <input type="range" id="f_refOpacity" min="0" max="1" step="0.05" value="0.35"></label>
       <hr style="border:none;border-top:1px solid var(--line);margin:10px 0">
-      <p class="hint"><strong>שרטוט צורה אוטומטי מה-AI</strong> - קודם חייבים למלא גובה ורוחב למעלה (ב"מידות כלליות"), כדי שיהיה קנה מידה אמיתי. ה-AI לא מנחש מ"מ - הוא רק מתאר פרופורציה, והאפליקציה מבצעת את קנה המידה לפי המספרים שהזנת.</p>
-      <button type="button" id="btnGenSketch" class="secondary-btn">בנה סקיצה ראשונית מהתמונה</button>
+      <p class="hint">קודם חייבים למלא גובה ורוחב למעלה (ב"מידות כלליות"), כדי שיהיה קנה מידה אמיתי. אף שיטה לא מנחשת מ"מ - כולן רק מתארות פרופורציה, והאפליקציה מבצעת את קנה המידה לפי המספרים שהזנת.</p>
+      <button type="button" id="btnGenPixelSketch" class="secondary-btn">🔍 בנה שרטוט מדויק מפיקסלים (חינם, ללא AI, מומלץ לרקע אחיד)</button>
+      <button type="button" id="btnGenSketch" class="secondary-btn">🤖 בנה סקיצה עם AI (מזהה חלקים נפרדים, אבל מנחש קואורדינטות)</button>
       <div id="sketchStatus" class="hint" style="margin-top:6px"></div>
 
       <div id="sketchToolsBox" style="display:none">

@@ -243,6 +243,43 @@ function smoothClosedPath(points){
   return d + 'Z';
 }
 
+/* pixel-exact alternative to generateAiSketch() - no network call, no AI guessing,
+   just deterministic contour tracing of the first uploaded image. Produces a single part
+   (this method can't tell "cup" from "saucer" the way the AI can - it just finds the outer
+   silhouette boundary). */
+async function generatePixelSketch(){
+  const status = document.getElementById('sketchStatus');
+  const H = num('d_H'), W = num('d_W');
+  if(!H || !W){
+    status.textContent = 'קודם צריך למלא גובה ורוחב ב"מידות כלליות" למעלה - בלעדיהם אין קנה מידה לסקיצה.';
+    return;
+  }
+  if(refImages.length === 0){
+    status.textContent = 'קודם צריך להעלות לפחות תמונת רפרנס אחת.';
+    return;
+  }
+  status.textContent = '🔍 מזהה קווי מתאר מהפיקסלים...';
+  const result = await extractPixelContour(refImages[0]);
+  if(!result){
+    status.textContent = 'לא הצלחתי לזהות קונטור ברור בתמונה (רקע לא אחיד/לא מספיק ניגודיות?) - נסי תמונה עם רקע פשוט ואחיד, או השתמשי בכפתור סקיצת ה-AI.';
+    return;
+  }
+  const margin = 16;
+  aiSketchParts = [{
+    id: 'part' + Date.now(),
+    name: 'מוצר (מזוהה מפיקסלים)',
+    primary: true,
+    visible: true,
+    symmetric: false,
+    axisX: null,
+    smooth: true,
+    points: result.points.map(p => ({ x: margin + (p.x/100) * W, y: margin + (p.y/100) * H }))
+  }];
+  activePartId = aiSketchParts[0].id;
+  status.textContent = `🔍 זוהה קונטור מדויק מהפיקסלים (${result.simplifiedPointCount} נקודות אחרי פישוט, מתוך ${result.rawPointCount} נקודות גבול גולמיות). זו שיטה דטרמיניסטית - אין ניחוש AI - אבל היא לא יודעת לזהות כמה חלקים נפרדים יש (למשל כוס+צלוחית ייצאו כמתאר אחד מאוחד). גררי נקודות לדיוק נוסף במידת הצורך.`;
+  render();
+}
+
 async function generateAiSketch(){
   const status = document.getElementById('sketchStatus');
   const H = num('d_H'), W = num('d_W');
@@ -471,6 +508,119 @@ function analyzeImageBBox(dataURL){
       }
       if(!found){ resolve(null); return; }
       resolve({ w: maxX-minX, h: maxY-minY, aspect: (maxX-minX)/Math.max(1,(maxY-minY)) });
+    };
+    img.onerror = () => resolve(null);
+    img.src = dataURL;
+  });
+}
+
+/* ===================== pixel-accurate contour tracing ===================== */
+/* Deterministic image-processing outline extraction (Moore-neighbor boundary tracing +
+   Douglas-Peucker simplification), instead of asking a vision-LLM to guess coordinates.
+   Exact to the actual pixels of the photo - no AI call needed for the outline itself.
+   Works best on a plain, high-contrast background; reflective/transparent materials (glass,
+   crystal) can still break the boundary since the background shows through the object. */
+
+function traceContourPoints(mask, w, h){
+  function fg(x,y){ return x>=0 && y>=0 && x<w && y<h && mask[y*w+x]; }
+  let sx=-1, sy=-1;
+  outer: for(let y=0;y<h;y++){ for(let x=0;x<w;x++){ if(fg(x,y)){ sx=x; sy=y; break outer; } } }
+  if(sx<0) return [];
+
+  const dirs = [[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]]; // 8-connected, clockwise from East
+  const boundary = [];
+  let cx=sx, cy=sy, curDir=6;
+  const maxSteps = w*h*4;
+  let steps=0;
+  const firstX=cx, firstY=cy;
+  do {
+    boundary.push({x:cx, y:cy});
+    let found=false;
+    for(let i=0;i<8;i++){
+      const d = (curDir + i) % 8;
+      const nx = cx+dirs[d][0], ny = cy+dirs[d][1];
+      if(fg(nx,ny)){
+        cx=nx; cy=ny;
+        curDir = (d+6)%8; // back up ~135deg so the next search starts from behind the entry direction
+        found=true;
+        break;
+      }
+    }
+    if(!found) break;
+    steps++;
+  } while(!(cx===firstX && cy===firstY) && steps<maxSteps);
+  return boundary;
+}
+
+function perpendicularDistance(p, a, b){
+  const dx=b.x-a.x, dy=b.y-a.y;
+  const len = Math.hypot(dx,dy);
+  if(len === 0) return Math.hypot(p.x-a.x, p.y-a.y);
+  return Math.abs(dy*p.x - dx*p.y + b.x*a.y - b.y*a.x) / len;
+}
+
+function douglasPeucker(points, epsilon){
+  if(points.length < 3) return points;
+  let maxDist = 0, index = 0;
+  const start = points[0], end = points[points.length-1];
+  for(let i=1;i<points.length-1;i++){
+    const d = perpendicularDistance(points[i], start, end);
+    if(d > maxDist){ maxDist = d; index = i; }
+  }
+  if(maxDist > epsilon){
+    const left = douglasPeucker(points.slice(0, index+1), epsilon);
+    const right = douglasPeucker(points.slice(index), epsilon);
+    return left.slice(0, -1).concat(right);
+  }
+  return [start, end];
+}
+
+function simplifyClosedContour(points, epsilon){
+  if(points.length < 6) return points;
+  const half = Math.floor(points.length/2);
+  const arcA = douglasPeucker(points.slice(0, half+1), epsilon);
+  const arcB = douglasPeucker(points.slice(half), epsilon);
+  return arcA.slice(0, -1).concat(arcB.slice(0, -1));
+}
+
+/* returns {points:[{x,y} normalized 0-100], notes} or null if no clear silhouette found */
+function extractPixelContour(dataURL){
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const cw = 260, ch = Math.max(1, Math.round(260 * img.height / img.width));
+      const canvas = document.createElement('canvas');
+      canvas.width = cw; canvas.height = ch;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, cw, ch);
+      let data;
+      try { data = ctx.getImageData(0, 0, cw, ch).data; }
+      catch(e){ resolve(null); return; }
+
+      const mask = new Uint8Array(cw*ch);
+      for(let y=0; y<ch; y++){
+        for(let x=0; x<cw; x++){
+          const i = (y*cw+x)*4;
+          const r=data[i], g=data[i+1], b=data[i+2], a=data[i+3];
+          const isBg = a < 10 || (r>235 && g>235 && b>235);
+          mask[y*cw+x] = isBg ? 0 : 1;
+        }
+      }
+
+      const raw = traceContourPoints(mask, cw, ch);
+      if(raw.length < 8){ resolve(null); return; }
+      const simplified = simplifyClosedContour(raw, Math.max(1, cw*0.006));
+      if(simplified.length < 4){ resolve(null); return; }
+
+      const xs = raw.map(p=>p.x), ys = raw.map(p=>p.y);
+      const minX = Math.min(...xs), maxX = Math.max(...xs);
+      const minY = Math.min(...ys), maxY = Math.max(...ys);
+      const bw = Math.max(1, maxX-minX), bh = Math.max(1, maxY-minY);
+      const normPoints = simplified.map(p => ({
+        x: ((p.x - minX) / bw) * 100,
+        y: ((p.y - minY) / bh) * 100
+      }));
+      resolve({ points: normPoints, rawPointCount: raw.length, simplifiedPointCount: normPoints.length });
     };
     img.onerror = () => resolve(null);
     img.src = dataURL;
@@ -1039,6 +1189,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   });
 
   document.getElementById('btnGenSketch').addEventListener('click', generateAiSketch);
+  document.getElementById('btnGenPixelSketch').addEventListener('click', generatePixelSketch);
 
   document.getElementById('btnResetSketch').addEventListener('click', ()=>{
     aiSketchParts = null;
