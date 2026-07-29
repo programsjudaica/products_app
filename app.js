@@ -39,7 +39,10 @@ function combinedSketchPathD(){
   if(!aiSketchParts) return null;
   const visible = aiSketchParts.filter(p => p.visible);
   if(visible.length === 0) return null;
-  return visible.map(p => pointsToPath(fullPointsForPart(p))).join(' ');
+  return visible.map(p => {
+    const pts = fullPointsForPart(p);
+    return p.smooth === false ? pointsToPath(pts) : smoothClosedPath(pts);
+  }).join(' ');
 }
 
 function convertPartToSymmetric(part){
@@ -220,6 +223,26 @@ function pointsToPath(points){
   return 'M ' + points.map(p => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' L ') + ' Z';
 }
 
+/* smooth closed curve through the same point data (Catmull-Rom -> cubic Bezier conversion) -
+   the underlying points stay simple corner data (draggable, mirrorable, distance-lockable
+   exactly as before), only the final line drawn between them changes from straight to curved.
+   Much smaller change than a true bezier-handle editor, and reuses everything already built. */
+function smoothClosedPath(points){
+  if(!points || points.length < 3) return pointsToPath(points);
+  const n = points.length;
+  let d = `M ${points[0].x.toFixed(2)},${points[0].y.toFixed(2)} `;
+  for(let i = 0; i < n; i++){
+    const p0 = points[(i - 1 + n) % n];
+    const p1 = points[i];
+    const p2 = points[(i + 1) % n];
+    const p3 = points[(i + 2) % n];
+    const c1x = p1.x + (p2.x - p0.x) / 6, c1y = p1.y + (p2.y - p0.y) / 6;
+    const c2x = p2.x - (p3.x - p1.x) / 6, c2y = p2.y - (p3.y - p1.y) / 6;
+    d += `C ${c1x.toFixed(2)},${c1y.toFixed(2)} ${c2x.toFixed(2)},${c2y.toFixed(2)} ${p2.x.toFixed(2)},${p2.y.toFixed(2)} `;
+  }
+  return d + 'Z';
+}
+
 async function generateAiSketch(){
   const status = document.getElementById('sketchStatus');
   const H = num('d_H'), W = num('d_W');
@@ -261,6 +284,7 @@ async function generateAiSketch(){
         visible: true,
         symmetric: false,
         axisX: null,
+        smooth: true,
         points: normPoints.map(pt => ({ x: margin + (pt.x/100) * W, y: margin + (pt.y/100) * H }))
       });
     });
@@ -271,7 +295,13 @@ async function generateAiSketch(){
     aiSketchParts = parts;
     activePartId = (parts.find(p => p.primary) || parts[0]).id;
 
+    if(typeof data.rotationally_symmetric === 'boolean'){
+      const chk = document.getElementById('f_rotationalSymmetry');
+      chk.checked = data.rotationally_symmetric;
+    }
+
     let msg = data.confidence ? `🤖 סקיצה נוצרה (רמת ביטחון: ${data.confidence}), ${parts.length} חלק/ים: ${parts.map(p=>p.name).join(', ')}.` : `🤖 סקיצה נוצרה, ${parts.length} חלק/ים.`;
+    if(typeof data.rotationally_symmetric === 'boolean') msg += data.rotationally_symmetric ? ' AI זיהה: מוצר עגול/סובב-סימטרי (Side/Back הוגדרו אוטומטית זהים ל-Front).' : '';
     if(data.notes) msg += ` ${data.notes}`;
     if(data.questions && data.questions.length) msg += ` שאלות מה-AI: ${data.questions.join(' | ')}`;
     msg += ' בחרי חלק לעריכה למטה וגררי את הנקודות שלו על תצוגת ה-Front כדי לדייק.';
@@ -295,6 +325,7 @@ function renderPartSelector(){
       <span class="part-name">${part.name}${part.primary ? ' (עיקרי)' : ''}</span>
       ${part.symmetric ? '<span class="sym-badge">סימטרי</span>' : ''}
       <label><input type="checkbox" data-visible-part-id="${part.id}" ${part.visible ? 'checked' : ''}> כלול</label>
+      <label title="עקומה חלקה מתאימה לצורות מעוגלות (גביע, גליל). קווים חדים מתאימים לצורות זוויתיות (קופסה, מכסה משופע)."><input type="checkbox" data-smooth-part-id="${part.id}" ${part.smooth !== false ? 'checked' : ''}> עקומה חלקה</label>
     </div>
   `).join('');
   box.querySelectorAll('input[data-part-id]').forEach(el => {
@@ -304,6 +335,13 @@ function renderPartSelector(){
     el.addEventListener('change', () => {
       const part = getPart(el.getAttribute('data-visible-part-id'));
       if(part) part.visible = el.checked;
+      render();
+    });
+  });
+  box.querySelectorAll('input[data-smooth-part-id]').forEach(el => {
+    el.addEventListener('change', () => {
+      const part = getPart(el.getAttribute('data-smooth-part-id'));
+      if(part) part.smooth = el.checked;
       render();
     });
   });
@@ -679,7 +717,18 @@ function frontLikeView({W,H,radius,color,texture,ribZone,showRibs,text,font,font
   return svgWrap(vbW, vbH, inner);
 }
 
-function topBottomView({W,D,radius,color,texture,mode,slotW,slotH,cork,slotOffsetX,slotOffsetY,corkOffsetX,corkOffsetY,dims,circleDiameter,hasSlot,hasCork}){
+function topBottomView({W,D,radius,color,texture,mode,slotW,slotH,cork,slotOffsetX,slotOffsetY,corkOffsetX,corkOffsetY,dims,circleDiameter,hasSlot,hasCork,unavailable}){
+  if(unavailable){
+    const margin = 16, w = 55, h = 55;
+    const vbW = w + margin*2, vbH = h + margin*2;
+    const inner = `
+      <rect x="${margin}" y="${margin}" width="${w}" height="${h}" fill="none" stroke="#ccc" stroke-dasharray="2,2"/>
+      <text x="${vbW/2}" y="${vbH/2-2}" text-anchor="middle" font-size="4.5" fill="#999">אין מידע</text>
+      <text x="${vbW/2}" y="${vbH/2+4}" text-anchor="middle" font-size="4.5" fill="#999">מהתמונה</text>
+      <text x="${vbW/2}" y="${vbH-3}" text-anchor="middle" class="view-caption">${mode==='top'?'TOP':'BOTTOM'}</text>
+    `;
+    return svgWrap(vbW, vbH, inner);
+  }
   const margin = 16;
   if(circleDiameter){ W = circleDiameter; D = circleDiameter; }
   const vbW = W + margin*2, vbH = D + margin*2;
@@ -809,12 +858,16 @@ function render(){
   }
   document.getElementById('sketchToolsBox').style.display = aiSketchParts ? 'block' : 'none';
   if(aiSketchParts) renderPartSelector();
+  /* once an AI sketch exists, TOP/BOTTOM must never silently fall back to the generic
+     box+slot shape (it would contradict whatever FRONT actually shows) - show an honest
+     "no data from the photo" placeholder instead, unless the object is round (circleDiameter) */
+  const topBottomUnavailable = !!(aiSketchParts && !circleDiameter);
 
   const views = document.getElementById('viewsGrid');
   views.innerHTML = '';
   const specs = [
-    {label:'TOP', html: topBottomView({W:d.W,D:d.D,radius:Math.min(d.radius,d.D/2-1),color:s.color,texture:s.texture,mode:'top',hasSlot:s.hasSlot,slotW:d.slotW,slotH:d.slotH,slotOffsetX:s.slotOffsetX,slotOffsetY:s.slotOffsetY,circleDiameter,dims:circleDiameter?{}:{W:s.W,D:s.D,slotW:s.slotW,slotOffsetX:s.slotOffsetX,slotOffsetY:s.slotOffsetY}})},
-    {label:'BOTTOM', html: topBottomView({W:d.W,D:d.D,radius:Math.min(d.radius,d.D/2-1),color:s.color,texture:s.texture,mode:'bottom',hasCork:s.hasCork,cork:d.cork,corkOffsetX:s.corkOffsetX,corkOffsetY:s.corkOffsetY,circleDiameter,dims:{W:null,D:null,cork:s.cork,corkOffsetX:s.corkOffsetX,corkOffsetY:s.corkOffsetY}})},
+    {label:'TOP', html: topBottomView({W:d.W,D:d.D,radius:Math.min(d.radius,d.D/2-1),color:s.color,texture:s.texture,mode:'top',hasSlot:s.hasSlot,slotW:d.slotW,slotH:d.slotH,slotOffsetX:s.slotOffsetX,slotOffsetY:s.slotOffsetY,circleDiameter,unavailable:topBottomUnavailable,dims:circleDiameter?{}:{W:s.W,D:s.D,slotW:s.slotW,slotOffsetX:s.slotOffsetX,slotOffsetY:s.slotOffsetY}})},
+    {label:'BOTTOM', html: topBottomView({W:d.W,D:d.D,radius:Math.min(d.radius,d.D/2-1),color:s.color,texture:s.texture,mode:'bottom',hasCork:s.hasCork,cork:d.cork,corkOffsetX:s.corkOffsetX,corkOffsetY:s.corkOffsetY,circleDiameter,unavailable:topBottomUnavailable,dims:{W:null,D:null,cork:s.cork,corkOffsetX:s.corkOffsetX,corkOffsetY:s.corkOffsetY}})},
     {label:'FRONT', html: frontLikeView({W:d.W,H:d.H,radius:d.radius,color:s.color,texture:s.texture,ribZone,showRibs:!aiSketchParts,curvedLine:!aiSketchParts,text:s.text,font:s.font,fontsize:s.fontsize,letterspacing:s.letterspacing,strokew:s.strokew,dims:aiSketchParts?{}:{W:s.W,H:s.H},label:'',
       bgImage: (s.showRefBg && refImages[0]) ? refImages[0] : null, bgOpacity: s.refOpacity,
       textOffsetX:s.textOffsetX, textOffsetY:s.textOffsetY, textVectorData:textVector,

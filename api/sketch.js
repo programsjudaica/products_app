@@ -20,6 +20,7 @@ Respond with ONLY a JSON object, no markdown fences, no extra text:
       "primary": true or false
     }
   ],
+  "rotationally_symmetric": true or false,
   "confidence": "high" | "medium" | "low",
   "questions": ["short clarifying questions about anything structurally ambiguous or ambiguous about which parts should be included - empty array if none"],
   "notes": "one sentence on what angle/photo you traced from and any uncertainty"
@@ -28,6 +29,7 @@ Respond with ONLY a JSON object, no markdown fences, no extra text:
 Rules:
 - If the product is one single piece, return exactly one entry in "parts".
 - If it's multiple distinct physical pieces (e.g. a goblet + its separate saucer), return one part per piece, each with its own name. Mark the main/central piece "primary": true and accessories "primary": false.
+- "rotationally_symmetric" means: is this an object of revolution around a vertical axis (a turned/round form like a goblet, candlestick, spice tower, round dish) where the front, back and side views would all look the same, and the top/bottom views would be circles? Set it true only when you're confident the object is round like that - false for anything box-like or otherwise not round from every horizontal angle.
 - Only trace what is actually visible. If the photos don't show the product's own front face clearly, say so in notes and lower confidence rather than inventing a silhouette.
 - Never output curves (C/Q/A/S commands) - approximate any curved edges with several short straight segments instead.`;
 
