@@ -141,6 +141,7 @@ function applyAiData(data, statusEl){
     const hex = data.color_hex.startsWith('#') ? data.color_hex : '#'+data.color_hex;
     if(setField('f_color', hex)) applied.push('צבע');
   }
+  if(setField('f_colorname', data.color_name)) applied.push('תיאור צבע');
   const knownTextures = ['ribs','stone','crystal','concrete','glass','wood','leather','none'];
   if(data.texture_type && knownTextures.includes(data.texture_type)){
     if(setField('f_texture', data.texture_type)) applied.push('טקסטורה');

@@ -9,6 +9,7 @@ Respond with ONLY a single JSON object, no markdown fences, no extra commentary,
 {
   "material": "short free-text guess, e.g. 'Polyresin, matte stone finish'",
   "color_hex": "6 hex digits, no # prefix, best estimate of the dominant body color",
+  "color_name": "short human-readable color description in words, e.g. 'black with silver accents' or 'warm ivory / stone tone' - must match color_hex, not a leftover from a different product",
   "shape_family": "short free-text description of the overall form, e.g. 'rounded rectangular box'",
   "texture_type": "must be exactly one of: ribs | stone | crystal | concrete | glass | wood | leather | none",
   "top_opening": { "present": true or false, "offsetX_hint": number or null },
