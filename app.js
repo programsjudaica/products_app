@@ -145,9 +145,21 @@ function applyAiData(data, statusEl){
   if(data.text_style && ['engraved','embossed'].includes(data.text_style)){
     if(setField('f_textStyle', data.text_style)) applied.push('סגנון כיתוב');
   }
+  function setCheckbox(id, checked, label){
+    const el = document.getElementById(id);
+    if(el.checked !== checked){
+      el.checked = checked;
+      el.dispatchEvent(new Event('input', {bubbles:true}));
+    }
+    applied.push(label);
+  }
   if(data.top_opening){
+    if(typeof data.top_opening.present === 'boolean') setCheckbox('f_hasSlot', data.top_opening.present, data.top_opening.present ? 'יש חריץ עליון' : 'אין חריץ עליון');
     if(setField('d_slotOffsetX', data.top_opening.offsetX_hint)) applied.push('מיקום חריץ (אופקי)');
     if(setField('d_slotOffsetY', data.top_opening.offsetY_hint)) applied.push('מיקום חריץ (מהקצה)');
+  }
+  if(data.bottom_opening && typeof data.bottom_opening.present === 'boolean'){
+    setCheckbox('f_hasCork', data.bottom_opening.present, data.bottom_opening.present ? 'יש פתח תחתון' : 'אין פתח תחתון');
   }
   if(data.text_position){
     if(setField('f_textOffsetX', data.text_position.offsetX_hint)) applied.push('מיקום טקסט (אופקי)');
@@ -156,7 +168,6 @@ function applyAiData(data, statusEl){
 
   let msg = applied.length ? `הוחל אוטומטית: ${applied.join(', ')}.` : 'לא נמצאו שדות מוכרים בתשובת ה-AI - בדקי את הפורמט.';
   if(data.shape_family) msg += ` משפחת צורה מוצעת ע"י ה-AI: "${data.shape_family}" (הפרוטוטייפ תומך כרגע רק ב"קופסה מעוגלת").`;
-  if(data.top_opening && data.top_opening.present === false) msg += ' AI ציין: לא נראה פתח עליון בתמונה - בדקי אם רלוונטי.';
   if(data.notes) msg += ` הערת AI: ${data.notes}`;
   if(statusEl) statusEl.textContent = msg;
   render();
@@ -374,8 +385,10 @@ function getState(){
     texture: txt('f_texture'),
     H: num('d_H'), W: num('d_W'), D: num('d_D'),
     wall: num('d_wall'), radius: num('d_radius'), bottom: num('d_bottom'),
+    hasSlot: document.getElementById('f_hasSlot').checked,
     slotW: num('d_slotW'), slotH: num('d_slotH'),
     slotOffsetX: num('d_slotOffsetX'), slotOffsetY: num('d_slotOffsetY'),
+    hasCork: document.getElementById('f_hasCork').checked,
     cork: num('d_cork'), corkNote: txt('d_corkNote'),
     corkOffsetX: num('d_corkOffsetX'), corkOffsetY: num('d_corkOffsetY'),
     text: txt('f_text'), font: document.getElementById('f_font').value,
@@ -666,7 +679,7 @@ function frontLikeView({W,H,radius,color,texture,ribZone,showRibs,text,font,font
   return svgWrap(vbW, vbH, inner);
 }
 
-function topBottomView({W,D,radius,color,texture,mode,slotW,slotH,cork,slotOffsetX,slotOffsetY,corkOffsetX,corkOffsetY,dims,circleDiameter}){
+function topBottomView({W,D,radius,color,texture,mode,slotW,slotH,cork,slotOffsetX,slotOffsetY,corkOffsetX,corkOffsetY,dims,circleDiameter,hasSlot,hasCork}){
   const margin = 16;
   if(circleDiameter){ W = circleDiameter; D = circleDiameter; }
   const vbW = W + margin*2, vbH = D + margin*2;
@@ -676,7 +689,7 @@ function topBottomView({W,D,radius,color,texture,mode,slotW,slotH,cork,slotOffse
     : roundedRectPath(x,y,W,D,radius);
   const cid = 'clip'+(clipCounter++);
   let feature = '';
-  if(mode === 'top'){
+  if(mode === 'top' && hasSlot){
     const sw = slotW, sh = slotH;
     const offX = slotOffsetX ?? 0;
     const offY = slotOffsetY ?? (D*0.32);
@@ -685,7 +698,7 @@ function topBottomView({W,D,radius,color,texture,mode,slotW,slotH,cork,slotOffse
     if(dims && dims.slotW!==null && dims.slotW!==undefined) feature += dimLine(sx, sy-4, sx+sw, sy-4, dims.slotW, 'h');
     if(dims && dims.slotOffsetY!==null && dims.slotOffsetY!==undefined) feature += dimLine(x-8, y, x-8, y+offY, dims.slotOffsetY, 'v');
     if(dims && dims.slotOffsetX!==null && dims.slotOffsetX!==undefined) feature += dimLine(x+W/2, sy+sh+5, sx+sw/2, sy+sh+5, dims.slotOffsetX, 'h');
-  } else if(mode === 'bottom'){
+  } else if(mode === 'bottom' && hasCork){
     const r = cork/2;
     const offX = corkOffsetX ?? 0;
     const offY = corkOffsetY ?? 0;
@@ -765,6 +778,8 @@ function render(){
   const ribZone = d.W * 0.24;
   updateAspectSuggestion();
   updateDistanceLockStatus();
+  document.getElementById('slotFields').style.display = s.hasSlot ? 'block' : 'none';
+  document.getElementById('corkFields').style.display = s.hasCork ? 'block' : 'none';
 
   document.querySelector('.sheet-header .code').textContent = s.code || '—';
   document.querySelector('.sheet-header .title').textContent =
@@ -798,8 +813,8 @@ function render(){
   const views = document.getElementById('viewsGrid');
   views.innerHTML = '';
   const specs = [
-    {label:'TOP', html: topBottomView({W:d.W,D:d.D,radius:Math.min(d.radius,d.D/2-1),color:s.color,texture:s.texture,mode:'top',slotW:d.slotW,slotH:d.slotH,slotOffsetX:s.slotOffsetX,slotOffsetY:s.slotOffsetY,circleDiameter,dims:circleDiameter?{}:{W:s.W,D:s.D,slotW:s.slotW,slotOffsetX:s.slotOffsetX,slotOffsetY:s.slotOffsetY}})},
-    {label:'BOTTOM', html: topBottomView({W:d.W,D:d.D,radius:Math.min(d.radius,d.D/2-1),color:s.color,texture:s.texture,mode:'bottom',cork:d.cork,corkOffsetX:s.corkOffsetX,corkOffsetY:s.corkOffsetY,circleDiameter,dims:{W:null,D:null,cork:s.cork,corkOffsetX:s.corkOffsetX,corkOffsetY:s.corkOffsetY}})},
+    {label:'TOP', html: topBottomView({W:d.W,D:d.D,radius:Math.min(d.radius,d.D/2-1),color:s.color,texture:s.texture,mode:'top',hasSlot:s.hasSlot,slotW:d.slotW,slotH:d.slotH,slotOffsetX:s.slotOffsetX,slotOffsetY:s.slotOffsetY,circleDiameter,dims:circleDiameter?{}:{W:s.W,D:s.D,slotW:s.slotW,slotOffsetX:s.slotOffsetX,slotOffsetY:s.slotOffsetY}})},
+    {label:'BOTTOM', html: topBottomView({W:d.W,D:d.D,radius:Math.min(d.radius,d.D/2-1),color:s.color,texture:s.texture,mode:'bottom',hasCork:s.hasCork,cork:d.cork,corkOffsetX:s.corkOffsetX,corkOffsetY:s.corkOffsetY,circleDiameter,dims:{W:null,D:null,cork:s.cork,corkOffsetX:s.corkOffsetX,corkOffsetY:s.corkOffsetY}})},
     {label:'FRONT', html: frontLikeView({W:d.W,H:d.H,radius:d.radius,color:s.color,texture:s.texture,ribZone,showRibs:!aiSketchParts,curvedLine:!aiSketchParts,text:s.text,font:s.font,fontsize:s.fontsize,letterspacing:s.letterspacing,strokew:s.strokew,dims:aiSketchParts?{}:{W:s.W,H:s.H},label:'',
       bgImage: (s.showRefBg && refImages[0]) ? refImages[0] : null, bgOpacity: s.refOpacity,
       textOffsetX:s.textOffsetX, textOffsetY:s.textOffsetY, textVectorData:textVector,

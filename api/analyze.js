@@ -12,6 +12,7 @@ Respond with ONLY a single JSON object, no markdown fences, no extra commentary,
   "shape_family": "short free-text description of the overall form, e.g. 'rounded rectangular box'",
   "texture_type": "must be exactly one of: ribs | stone | crystal | concrete | glass | wood | leather | none",
   "top_opening": { "present": true or false, "offsetX_hint": number or null },
+  "bottom_opening": { "present": true or false },
   "text_position": { "offsetX_hint": number or null, "offsetY_hint": number or null },
   "text_style": "must be exactly one of: engraved | embossed",
   "notes": "any other detail relevant to a manufacturing spec sheet, in one or two sentences"

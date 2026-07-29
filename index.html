@@ -82,25 +82,29 @@
         <label>רדיוס פינה <input type="number" id="d_radius" placeholder="6"></label>
         <label>עובי בסיס <input type="number" id="d_bottom" placeholder="3"></label>
       </div>
-      <h3>חריץ עליון</h3>
-      <div class="row3">
-        <label>רוחב חריץ <input type="number" id="d_slotW" placeholder="50"></label>
-        <label>גובה חריץ <input type="number" id="d_slotH" placeholder="7"></label>
+      <h3><label class="checkline"><input type="checkbox" id="f_hasSlot" checked> יש חריץ עליון</label></h3>
+      <div id="slotFields">
+        <div class="row3">
+          <label>רוחב חריץ <input type="number" id="d_slotW" placeholder="50"></label>
+          <label>גובה חריץ <input type="number" id="d_slotH" placeholder="7"></label>
+        </div>
+        <p class="hint">מיקום החריץ (ריק = ברירת מחדל ממורכזת)</p>
+        <div class="row3">
+          <label>היסט אופקי מהמרכז <input type="number" id="d_slotOffsetX" placeholder="0"></label>
+          <label>מרחק מהקצה הקדמי <input type="number" id="d_slotOffsetY" placeholder="20"></label>
+        </div>
       </div>
-      <p class="hint">מיקום החריץ (ריק = ברירת מחדל ממורכזת)</p>
-      <div class="row3">
-        <label>היסט אופקי מהמרכז <input type="number" id="d_slotOffsetX" placeholder="0"></label>
-        <label>מרחק מהקצה הקדמי <input type="number" id="d_slotOffsetY" placeholder="20"></label>
-      </div>
-      <h3>פתח תחתון (פקק)</h3>
-      <div class="row3">
-        <label>קוטר פתח <input type="number" id="d_cork" placeholder="34"></label>
-        <label>הערת פתח <input type="text" id="d_corkNote" placeholder="same as UK81358"></label>
-      </div>
-      <p class="hint">מיקום הפתח (ריק = ברירת מחדל ממורכזת)</p>
-      <div class="row3">
-        <label>היסט X מהמרכז <input type="number" id="d_corkOffsetX" placeholder="0"></label>
-        <label>היסט Y מהמרכז <input type="number" id="d_corkOffsetY" placeholder="0"></label>
+      <h3><label class="checkline"><input type="checkbox" id="f_hasCork" checked> יש פתח/פקק תחתון</label></h3>
+      <div id="corkFields">
+        <div class="row3">
+          <label>קוטר פתח <input type="number" id="d_cork" placeholder="34"></label>
+          <label>הערת פתח <input type="text" id="d_corkNote" placeholder="same as UK81358"></label>
+        </div>
+        <p class="hint">מיקום הפתח (ריק = ברירת מחדל ממורכזת)</p>
+        <div class="row3">
+          <label>היסט X מהמרכז <input type="number" id="d_corkOffsetX" placeholder="0"></label>
+          <label>היסט Y מהמרכז <input type="number" id="d_corkOffsetY" placeholder="0"></label>
+        </div>
       </div>
     </section>
 
@@ -173,18 +177,12 @@
 
     <section class="group">
       <h2>הערות ייצור</h2>
-      <textarea id="f_notes" rows="10">Overall dimensions: 140 H x 102 W x 62 D mm.
-Material: molded polyresin.
-Entire product in one uniform warm ivory / stone color.
-No gold electroforming, metal insert, foil or painted gold.
-Fine vertical rib texture only on side zones and rounded corners.
-Front and back center panels remain smooth.
-Curved front transition is a very shallow separation between surfaces; it should be minimally visible and must not form a deep groove.
-Hebrew text is engraved inward, centered and tone-on-tone.
-Top coin slot: 50 x 7 mm.
-Bottom opening and cork: same construction as UK81358, 42 mm.
+      <p class="hint">שימי לב: זה שדה חופשי שלא מתעדכן אוטומטית - כתבי כאן הערות ספציפיות למוצר הנוכחי (ולא תשאירי טקסט ממוצר קודם).</p>
+      <textarea id="f_notes" rows="10" placeholder="לדוגמה:
+Overall dimensions: ... mm.
+Material: ...
 Supplier to confirm draft angles, shrinkage allowance and final wall thickness before tooling.
-All edges and corners to be softly rounded; no sharp edges.</textarea>
+All edges and corners to be softly rounded; no sharp edges."></textarea>
     </section>
 
     <button id="btnExport" class="export-btn">ייצוא PDF (הדפסה)</button>
