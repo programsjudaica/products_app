@@ -289,19 +289,11 @@ function buildSkeleton(){
   `;
 }
 
-function aspectFor(viewKey, H, W, D, stretchOn){
-  if(!stretchOn) return null;
-  if((viewKey==='front'||viewKey==='back') && H && W) return `${W}/${H}`;
-  if(viewKey==='side' && H && D) return `${D}/${H}`;
-  if((viewKey==='top'||viewKey==='bottom') && W && D) return `${W}/${D}`;
-  return null;
-}
 
 function render(){
   const code = txt('f_code'), title = txt('f_title'), category = txt('f_category');
   const rev = txt('f_rev'), date = txt('f_date');
   const H = num('d_H'), W = num('d_W'), D = num('d_D');
-  const stretchOn = document.getElementById('f_stretchFit').checked;
   const text = txt('f_text');
   const fontsize = num('f_fontsize') || 14;
   const textcolor = document.getElementById('f_textcolor').value;
@@ -339,7 +331,6 @@ function render(){
     const box = document.createElement('div');
     box.className = 'view-box';
     const imgSrc = viewImages[v.key];
-    const ar = v.key==='section' ? null : aspectFor(v.key, H, W, D, stretchOn);
     const fitMode = 'contain'; // never distort the AI image - real measurements come from the dimension lines, not from stretching pixels
     const annotations = (dimAnnotations[v.key]||[]).map(dimLineSvg).join('');
     const autoDims = v.key==='section' ? '' : autoDimLines(v.key, H, W, D);
@@ -349,7 +340,7 @@ function render(){
 
     box.innerHTML = `
       <div class="label">${v.label}</div>
-      <div class="view-canvas" id="canvas-${v.key}" style="${ar?`aspect-ratio:${ar}`:''}">
+      <div class="view-canvas" id="canvas-${v.key}">
         ${imgSrc ? `<img src="${imgSrc}" style="object-fit:${fitMode}">` : (v.key==='section' ? '<div class="placeholder">שרטוט סכמטי - להוסיף ידנית</div>' : '<div class="placeholder">טרם נוצרה תמונה</div>')}
         ${engravedOverlay}
         <svg>${autoDims}${annotations}${pendingDot}</svg>
