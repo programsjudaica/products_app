@@ -121,6 +121,7 @@ Requirements for all 6 sub-images:
 - If the reference photo shows more than one physical unit (e.g. a matching pair or set), depict only ONE single unit, not both together
 - Back: not visible in the reference photo - do not invent any decorative detail for it. Render only the correct overall silhouette/proportions matching the other views, with the same material/texture, but no engraving.
 - Top, Bottom, Left Side, Right Side: infer the correct silhouette and proportions from the reference photo, consistent with the front view.
+- CRITICAL - structural consistency: identify every physical structural element visible in the reference photo (handles, spouts, feet, rims, insets, cutouts, protrusions, anything that is not just surface decoration). Every one of these elements MUST appear in EVERY view where it would actually be visible or would protrude into that view's silhouette - do not silently omit a handle or protrusion from the Top or Bottom view just because a typical/generic object of this rough category wouldn't normally have one there. Reason specifically about THIS object's actual geometry: e.g. if there are two side handles, the Top and Bottom views MUST show them sticking out on both sides, not a plain circle/oval as if the handles didn't exist.
 
 Output: a single image, exactly a 2x3 grid as specified, each cell clearly labeled.`;
 }
