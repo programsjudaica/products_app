@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>מחולל מפרט טכני - גרסה פשוטה (תמונות AI)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+
+  <aside class="panel">
+    <h1>מחולל מפרט טכני<br><span>גרסה פשוטה - תמונות AI + קווי מידה ידניים</span></h1>
+    <p class="hint">זו גרסה נפרדת מהגרסה הוקטורית - <a href="../index.html">לגרסה הוקטורית לחצי כאן</a>. כאן: AI מייצר תמונות (לא צורה וקטורית), ואת מוסיפה קווי מידה עם המספרים האמיתיים ידנית מעליהן.</p>
+
+    <section class="group">
+      <h2>זיהוי מוצר</h2>
+      <label>קוד מוצר <input type="text" id="f_code" placeholder="UK82437"></label>
+      <label>שם/כותרת <input type="text" id="f_title" placeholder="POLYRESIN CHARITY BOX"></label>
+      <label>קטגוריה <input type="text" id="f_category" placeholder="קופות צדקה"></label>
+      <div class="row">
+        <label>REV <input type="text" id="f_rev" value="01" style="width:4em"></label>
+        <label>תאריך <input type="date" id="f_date"></label>
+      </div>
+    </section>
+
+    <section class="group">
+      <h2>מידות אמיתיות (מ"מ) - אופציונלי</h2>
+      <p class="hint">משמשות למתיחה גסה של יחס התמונה, ומוצגות כברירת מחדל בקווי המידה.</p>
+      <div class="row3">
+        <label>גובה H <input type="number" id="d_H" placeholder="140"></label>
+        <label>רוחב W <input type="number" id="d_W" placeholder="102"></label>
+        <label>עומק D <input type="number" id="d_D" placeholder="62"></label>
+      </div>
+      <label class="checkline"><input type="checkbox" id="f_stretchFit" checked> מתח את תמונות Front/Back/Side/Top/Bottom כדי שהיחס הכללי יתאים למידות שהוזנו</label>
+    </section>
+
+    <section class="group">
+      <h2>ספריית פונטים (לשימוש חוזר)</h2>
+      <p class="hint">מעלים קובץ פונט (otf/ttf/woff) פעם אחת - הוא נשמר בדפדפן ואפשר לבחור בו שוב במוצרים הבאים.</p>
+      <input type="file" id="f_fontUpload" accept=".ttf,.otf,.woff,.woff2">
+      <div id="fontLibraryList" class="chip-list"></div>
+      <label>טקסט חרוט/מודפס <input type="text" id="f_text" dir="rtl" placeholder="צדקה"></label>
+      <div class="row3">
+        <label>גודל (מ"מ יחסי) <input type="number" id="f_fontsize" value="14"></label>
+        <label>צבע טקסט <input type="color" id="f_textcolor" value="#8a6a2a"></label>
+      </div>
+      <p class="hint">הטקסט מוצג כשכבה נפרדת מעל תמונת ה-Front, בפונט האמיתי - לא מבוקש מה-AI לצייר טקסט (כי AI לא מדויק בעברית).</p>
+    </section>
+
+    <section class="group">
+      <h2>תמונת רפרנס + יצירת AI</h2>
+      <input type="file" id="f_refImage" accept="image/*">
+      <div id="refImgPreview" class="img-preview-list"></div>
+      <button type="button" id="btnGenerateViews" class="secondary-btn">🎨 צור 6 תצוגות עם AI (GPT)</button>
+      <div id="genStatus" class="hint" style="margin-top:6px"></div>
+    </section>
+
+    <section class="group">
+      <h2>הערות ייצור</h2>
+      <textarea id="f_notes" rows="8" placeholder="לדוגמה:
+Overall dimensions: ... mm.
+Material: ...
+Supplier to confirm draft angles, shrinkage allowance and final wall thickness before tooling."></textarea>
+    </section>
+
+    <button id="btnExport" class="export-btn">ייצוא PDF (הדפסה)</button>
+  </aside>
+
+  <main class="preview-wrap">
+    <div id="specSheet" class="spec-sheet"></div>
+  </main>
+
+</div>
+<script src="app.js"></script>
+</body>
+</html>
