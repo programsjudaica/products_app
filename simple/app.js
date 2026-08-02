@@ -339,7 +339,7 @@ function render(){
     box.className = 'view-box';
     const imgSrc = viewImages[v.key];
     const ar = v.key==='section' ? null : aspectFor(v.key, H, W, D, stretchOn);
-    const fitMode = (stretchOn && ar) ? 'fill' : 'contain';
+    const fitMode = 'contain'; // never distort the AI image - real measurements come from the dimension lines, not from stretching pixels
     const annotations = (dimAnnotations[v.key]||[]).map(dimLineSvg).join('');
     const autoDims = v.key==='section' ? '' : autoDimLines(v.key, H, W, D);
     const pendingDot = (pendingPoint && pendingPoint.view===v.key)
