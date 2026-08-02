@@ -1,5 +1,5 @@
 // Vercel serverless function: POST { image: dataURL, prompt: string } -> { image: dataURL }
-// Uses OpenAI's image model (gpt-image-1) to generate a single 2x3 grid image (6 views)
+// Uses OpenAI's image model (gpt-image-2) to generate a single 2x3 grid image (6 views)
 // from one reference photo. Requires OPENAI_API_KEY in Vercel env vars (separate from
 // ANTHROPIC_API_KEY - OpenAI is the one used for image generation, Anthropic doesn't
 // generate images).
@@ -36,7 +36,7 @@ module.exports = async (req, res) => {
 
   const boundary = '----WebAppFormBoundary' + Math.random().toString(16).slice(2);
   const preamble =
-    `--${boundary}\r\nContent-Disposition: form-data; name="model"\r\n\r\ngpt-image-1\r\n` +
+    `--${boundary}\r\nContent-Disposition: form-data; name="model"\r\n\r\ngpt-image-2\r\n` +
     `--${boundary}\r\nContent-Disposition: form-data; name="prompt"\r\n\r\n${prompt}\r\n` +
     `--${boundary}\r\nContent-Disposition: form-data; name="size"\r\n\r\n1536x1024\r\n` +
     `--${boundary}\r\nContent-Disposition: form-data; name="image"; filename="reference.${ext}"\r\nContent-Type: ${mimeType}\r\n\r\n`;
