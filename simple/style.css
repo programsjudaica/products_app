@@ -114,7 +114,10 @@ textarea{resize:vertical}
 .side-col{display:flex; flex-direction:column; gap:6mm}
 .ref-box{border:1px solid #e2ddd2; border-radius:4px; padding:3mm}
 .ref-box .label{font-size:7.5pt; color:#8a8478; text-transform:uppercase; letter-spacing:.06em; margin-bottom:2mm; text-align:center}
-.ref-box img{width:100%; height:auto; max-height:70mm; object-fit:contain; border-radius:2px; background:#f1efe9; display:block; margin:0 auto}
+.ref-img-gallery{display:grid; grid-template-columns:1fr 1fr; gap:2mm}
+.ref-img-gallery.single{grid-template-columns:1fr}
+.ref-img-gallery img{width:100%; height:34mm; object-fit:contain; border-radius:2px; background:#f1efe9; display:block}
+.ref-img-gallery.single img{height:70mm}
 .detected-text-caption{font-size:7.3pt; color:#8a8478; text-align:center; margin-top:2mm; direction:rtl}
 .detected-text-caption strong{color:#4a453f}
 .engraved-box{border:1px solid #e2ddd2; border-radius:4px; padding:3mm; text-align:center}

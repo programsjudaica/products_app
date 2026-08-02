@@ -1,11 +1,13 @@
-// Vercel serverless function: POST { image: dataURL, prompt: string } -> { image: dataURL }
+// Vercel serverless function: POST { images: [dataURL, ...], prompt: string } -> { image: dataURL }
 // Uses OpenAI's image model (gpt-image-2) to generate a single 2x3 grid image (6 views)
-// from one reference photo. Requires OPENAI_API_KEY in Vercel env vars (separate from
-// ANTHROPIC_API_KEY - OpenAI is the one used for image generation, Anthropic doesn't
+// from one or more reference photos. Requires OPENAI_API_KEY in Vercel env vars (separate
+// from ANTHROPIC_API_KEY - OpenAI is the one used for image generation, Anthropic doesn't
 // generate images).
 //
 // This is the "simple" version's only AI call: the image is illustrative, not a source of
 // real dimensions - those always come from what the designer types and draws by hand on top.
+// Multiple reference photos (e.g. an extra angled/side shot) give the model real visual
+// evidence for views it would otherwise have to guess.
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -19,32 +21,43 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const { image, prompt } = req.body || {};
-  if (!image || !prompt) {
-    res.status(400).json({ error: 'Missing image or prompt' });
+  const { images, prompt } = req.body || {};
+  if (!Array.isArray(images) || images.length === 0 || !prompt) {
+    res.status(400).json({ error: 'Missing images or prompt' });
     return;
   }
 
-  const match = image.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
-  if (!match) {
-    res.status(400).json({ error: 'Invalid image data URL' });
+  const parsedImages = [];
+  for (const image of images.slice(0, 8)) {
+    const match = typeof image === 'string' && image.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+    if (!match) continue;
+    const mimeType = match[1];
+    const ext = (mimeType.split('/')[1] || 'png').replace('jpeg', 'jpg');
+    parsedImages.push({ mimeType, ext, buffer: Buffer.from(match[2], 'base64') });
+  }
+  if (parsedImages.length === 0) {
+    res.status(400).json({ error: 'No valid image data URLs provided' });
     return;
   }
-  const mimeType = match[1];
-  const ext = (mimeType.split('/')[1] || 'png').replace('jpeg', 'jpg');
-  const buffer = Buffer.from(match[2], 'base64');
 
   const boundary = '----WebAppFormBoundary' + Math.random().toString(16).slice(2);
-  const preamble =
+  const parts = [];
+  parts.push(Buffer.from(
     `--${boundary}\r\nContent-Disposition: form-data; name="model"\r\n\r\ngpt-image-2\r\n` +
     `--${boundary}\r\nContent-Disposition: form-data; name="prompt"\r\n\r\n${prompt}\r\n` +
-    `--${boundary}\r\nContent-Disposition: form-data; name="size"\r\n\r\n1536x1024\r\n` +
-    `--${boundary}\r\nContent-Disposition: form-data; name="image"; filename="reference.${ext}"\r\nContent-Type: ${mimeType}\r\n\r\n`;
-  const body = Buffer.concat([
-    Buffer.from(preamble, 'utf8'),
-    buffer,
-    Buffer.from(`\r\n--${boundary}--\r\n`, 'utf8')
-  ]);
+    `--${boundary}\r\nContent-Disposition: form-data; name="size"\r\n\r\n1536x1024\r\n`,
+    'utf8'
+  ));
+  parsedImages.forEach((img, i) => {
+    parts.push(Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="image[]"; filename="reference${i}.${img.ext}"\r\nContent-Type: ${img.mimeType}\r\n\r\n`,
+      'utf8'
+    ));
+    parts.push(img.buffer);
+    parts.push(Buffer.from('\r\n', 'utf8'));
+  });
+  parts.push(Buffer.from(`--${boundary}--\r\n`, 'utf8'));
+  const body = Buffer.concat(parts);
 
   try {
     const response = await fetch('https://api.openai.com/v1/images/edits', {

@@ -2,7 +2,7 @@
 
 let fontLibrary = [];          // [{id, name, dataUrl}]
 let activeFontId = null;
-let refImageDataUrl = null;
+let refImages = []; // data URLs, max 8
 let viewImages = { top:null, bottom:null, front:null, back:null, side:null };
 let dimAnnotations = { top:[], bottom:[], front:[], back:[], side:[] }; // {x1,y1,x2,y2,label} in % coords
 let pendingPoint = null; // {view, x, y} - first click of a dimension-line pair
@@ -129,8 +129,8 @@ Output: a single image, exactly a 2x3 grid as specified, each cell clearly label
 
 async function generateViews(){
   const status = document.getElementById('genStatus');
-  if(!refImageDataUrl){
-    status.textContent = 'קודם צריך להעלות תמונת רפרנס.';
+  if(refImages.length === 0){
+    status.textContent = 'קודם צריך להעלות לפחות תמונת רפרנס אחת.';
     return;
   }
   status.textContent = '🎨 יוצר 6 תצוגות עם AI... זה יכול לקחת כ-20-40 שניות.';
@@ -138,7 +138,7 @@ async function generateViews(){
     const resp = await fetch('/api/generate-views', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ image: refImageDataUrl, prompt: buildGenerationPrompt() })
+      body: JSON.stringify({ images: refImages, prompt: buildGenerationPrompt() })
     });
     if(!resp.ok){
       let errMsg = resp.status;
@@ -161,13 +161,13 @@ async function generateViews(){
    from the GPT image generation above. Fires automatically on reference image upload. */
 async function autoAnalyzeMaterial(){
   const status = document.getElementById('materialAnalysisStatus');
-  if(!refImageDataUrl) return;
+  if(refImages.length === 0) return;
   status.textContent = '🤖 מזהה חומר/צבע...';
   try {
     const resp = await fetch('/api/analyze', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ images: [refImageDataUrl] })
+      body: JSON.stringify({ images: refImages })
     });
     if(!resp.ok){
       let errMsg = resp.status;
@@ -273,7 +273,7 @@ function buildSkeleton(){
       <div class="side-col">
         <div class="ref-box">
           <div class="label">Reference appearance</div>
-          <img id="refImgBox" src="" style="display:none">
+          <div id="refImgGallery" class="ref-img-gallery"></div>
           <div id="detectedTextCaption" class="detected-text-caption"></div>
         </div>
         <div class="engraved-box" id="engravedBox" style="display:none">
@@ -305,9 +305,9 @@ function render(){
   document.querySelector('.sheet-header .meta').innerHTML =
     `Material: ${material || '—'}<br>Color: ${colorname || '—'}<br>H×W×D: ${H??'—'} × ${W??'—'} × ${D??'—'} מ"מ`;
 
-  const refImg = document.getElementById('refImgBox');
-  if(refImageDataUrl){ refImg.src = refImageDataUrl; refImg.style.display = 'block'; }
-  else { refImg.style.display = 'none'; }
+  const gallery = document.getElementById('refImgGallery');
+  gallery.innerHTML = refImages.length === 0 ? '' : refImages.map(src => `<img src="${src}">`).join('');
+  gallery.className = 'ref-img-gallery' + (refImages.length <= 1 ? ' single' : '');
 
   document.getElementById('detectedTextCaption').innerHTML = detectedText
     ? `טקסט שזוהה אוטומטית ע"י AI: <strong>${detectedText}</strong> (לאימות - לא וקטור מדויק)`
@@ -416,13 +416,25 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('f_refImage').addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if(!file) return;
-    refImageDataUrl = await fileToDataUrl(file);
-    const preview = document.getElementById('refImgPreview');
-    preview.innerHTML = `<img src="${refImageDataUrl}">`;
-    render();
-    autoAnalyzeMaterial();
+    const files = Array.from(e.target.files).slice(0,8);
+    if(files.length === 0) return;
+    const results = new Array(files.length);
+    let loaded = 0;
+    files.forEach((file, idx) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        results[idx] = reader.result;
+        loaded++;
+        if(loaded === files.length){
+          refImages = results;
+          const preview = document.getElementById('refImgPreview');
+          preview.innerHTML = refImages.map(src => `<img src="${src}">`).join('');
+          render();
+          autoAnalyzeMaterial();
+        }
+      };
+      reader.readAsDataURL(file);
+    });
   });
 
   document.getElementById('btnGenerateViews').addEventListener('click', generateViews);

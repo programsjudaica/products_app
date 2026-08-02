@@ -60,8 +60,9 @@
     </section>
 
     <section class="group">
-      <h2>תמונת רפרנס + יצירת AI</h2>
-      <input type="file" id="f_refImage" accept="image/*">
+      <h2>תמונות רפרנס + יצירת AI</h2>
+      <p class="hint">אפשר להעלות כמה תמונות (עד 8) - למשל תמונת הדמייה קדמית + תמונה נוספת מזווית צד. כל התמונות נשלחות יחד גם לניתוח החומר וגם ליצירת 6 התצוגות.</p>
+      <input type="file" id="f_refImage" accept="image/*" multiple>
       <div id="refImgPreview" class="img-preview-list"></div>
       <button type="button" id="btnGenerateViews" class="secondary-btn">🎨 צור 6 תצוגות עם AI (GPT)</button>
       <div id="genStatus" class="hint" style="margin-top:6px"></div>
