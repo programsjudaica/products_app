@@ -443,6 +443,16 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('btnGenerateViews').addEventListener('click', generateViews);
+
+  document.getElementById('btnShowPrompt').addEventListener('click', () => {
+    const box = document.getElementById('promptPreview');
+    if(box.style.display === 'none'){
+      box.value = buildGenerationPrompt();
+      box.style.display = 'block';
+    } else {
+      box.style.display = 'none';
+    }
+  });
   document.getElementById('btnExport').addEventListener('click', () => window.print());
 
   render();
