@@ -27,6 +27,15 @@
     </section>
 
     <section class="group">
+      <h2>חומר וצבע (מזוהה אוטומטית ע"י Claude Vision)</h2>
+      <p class="hint">מופעל אוטומטית כשמעלים תמונת רפרנס למטה - נפרד לגמרי מיצירת התמונות (GPT). אפשר לערוך ידנית.</p>
+      <label>חומר <input type="text" id="f_material" placeholder="Polyresin"></label>
+      <label>תיאור צבע <input type="text" id="f_colorname" placeholder="warm ivory / stone tone"></label>
+      <label>גוון <input type="color" id="f_color" value="#e8e1d3"></label>
+      <div id="materialAnalysisStatus" class="hint" style="margin-top:6px"></div>
+    </section>
+
+    <section class="group">
       <h2>מידות אמיתיות (מ"מ) - אופציונלי</h2>
       <p class="hint">משמשות למתיחה גסה של יחס התמונה, ומוצגות כברירת מחדל בקווי המידה.</p>
       <div class="row3">

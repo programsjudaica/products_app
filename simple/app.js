@@ -154,6 +154,43 @@ async function generateViews(){
   }
 }
 
+/* material/color/notes analysis via Claude Vision (/api/analyze) - completely separate
+   from the GPT image generation above. Fires automatically on reference image upload. */
+async function autoAnalyzeMaterial(){
+  const status = document.getElementById('materialAnalysisStatus');
+  if(!refImageDataUrl) return;
+  status.textContent = '🤖 מזהה חומר/צבע...';
+  try {
+    const resp = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ images: [refImageDataUrl] })
+    });
+    if(!resp.ok){
+      let errMsg = resp.status;
+      try { const err = await resp.json(); if(err.error) errMsg = err.error; } catch(e){}
+      status.textContent = `זיהוי אוטומטי לא זמין כרגע (${errMsg}).`;
+      return;
+    }
+    const data = await resp.json();
+    if(data.material) document.getElementById('f_material').value = data.material;
+    if(data.color_name) document.getElementById('f_colorname').value = data.color_name;
+    if(data.color_hex) document.getElementById('f_color').value = data.color_hex.startsWith('#') ? data.color_hex : '#'+data.color_hex;
+
+    const notesEl = document.getElementById('f_notes');
+    if(!notesEl.value.trim() && data.notes){
+      notesEl.value = data.notes;
+    }
+
+    let msg = '🤖 זוהה: ' + [data.material, data.color_name].filter(Boolean).join(', ') + '.';
+    if(data.notes) msg += ' ' + data.notes;
+    status.textContent = msg;
+    render();
+  } catch(e){
+    status.textContent = 'זיהוי אוטומטי לא זמין כרגע (השרת עדיין לא מחובר).';
+  }
+}
+
 /* ===================== dimension-line annotation tool ===================== */
 /* simple click-two-points-type-a-number tool - no vector shape editing, just
    static annotation lines drawn on top of whatever image is already there */
@@ -229,7 +266,9 @@ function render(){
 
   document.querySelector('.sheet-header .code').textContent = code || '—';
   document.querySelector('.sheet-header .title').textContent = (title||'').toUpperCase() + (category ? ' — ' + category : '');
-  document.querySelector('.sheet-header .meta').innerHTML = `H×W×D: ${H??'—'} × ${W??'—'} × ${D??'—'} מ"מ`;
+  const material = txt('f_material'), colorname = txt('f_colorname');
+  document.querySelector('.sheet-header .meta').innerHTML =
+    `Material: ${material || '—'}<br>Color: ${colorname || '—'}<br>H×W×D: ${H??'—'} × ${W??'—'} × ${D??'—'} מ"מ`;
 
   const refImg = document.getElementById('refImgBox');
   if(refImageDataUrl){ refImg.src = refImageDataUrl; refImg.style.display = 'block'; }
@@ -335,6 +374,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const preview = document.getElementById('refImgPreview');
     preview.innerHTML = `<img src="${refImageDataUrl}">`;
     render();
+    autoAnalyzeMaterial();
   });
 
   document.getElementById('btnGenerateViews').addEventListener('click', generateViews);
