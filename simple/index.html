@@ -71,6 +71,23 @@
       <div id="genStatus" class="hint" style="margin-top:6px"></div>
       <button type="button" id="btnShowPrompt" class="secondary-btn">👁 הצג את הפרומפט המדויק שיישלח</button>
       <textarea id="promptPreview" rows="10" readonly style="display:none; margin-top:6px; font-size:.68rem; font-family:monospace; direction:ltr; text-align:left"></textarea>
+
+      <hr style="border:none;border-top:1px solid var(--line);margin:10px 0">
+      <p class="hint"><strong>יצירה מחדש של תצוגה בודדת</strong> - אחרי שיש כבר 6 תצוגות, אפשר להחליף רק אחת מהן עם הערה ממוקדת, בלי לגעת בשאר.</p>
+      <label>איזו תצוגה
+        <select id="f_singleViewPicker">
+          <option value="top">Top</option>
+          <option value="bottom">Bottom</option>
+          <option value="front">Front</option>
+          <option value="back">Back</option>
+          <option value="side">Side</option>
+        </select>
+      </label>
+      <label>הערה ממוקדת לתצוגה הזו
+        <textarea id="f_singleViewNote" rows="2" placeholder="למשל: &quot;הידיות פונות אחורה בזווית של כ-45 מעלות, לא ישר לצדדים&quot;"></textarea>
+      </label>
+      <button type="button" id="btnRegenerateSingleView" class="secondary-btn">🎨 צור מחדש רק את התצוגה הזו</button>
+      <div id="singleViewStatus" class="hint" style="margin-top:6px"></div>
     </section>
 
     <section class="group">

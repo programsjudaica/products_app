@@ -132,6 +132,57 @@ Requirements for all 6 sub-images:
 Output: a single image, exactly a 2x3 grid as specified, each cell clearly labeled.`;
 }
 
+const singleViewLabels = { top:'Top', bottom:'Bottom', front:'Front', back:'Back', side:'Right Side' };
+let viewNotes = { top:'', bottom:'', front:'', back:'', side:'' }; // remembers a per-view note while switching the picker
+
+function buildSingleViewPrompt(viewLabel, viewNote){
+  const globalNotes = txt('f_aiNotes').trim();
+  let notesBlock = '';
+  if(globalNotes) notesBlock += `\n\nGeneral designer notes about this product (ground truth, overrides assumptions if they conflict): ${globalNotes}`;
+  if(viewNote) notesBlock += `\n\nSpecific instructions for THIS view (${viewLabel}) - follow these precisely, they are the most important guidance for this image: ${viewNote}`;
+  return `Using the attached photo(s) as reference, generate ONE single image showing ONLY the "${viewLabel}" straight-on orthographic view (no angle, no perspective, no isometric/3D under any circumstances) of this exact physical product.
+${notesBlock}
+
+Requirements:
+- Flat, clean technical/catalog illustration style - no dramatic lighting, no shadows, no reflections
+- Plain solid white background, filling the frame with just this one view, no grid, no labels, no other angles
+- Preserve the actual materials, colors and textures visible in the reference photo
+- Do NOT add any decorative element, icon, symbol, handle, protrusion or other structural detail that is not visible in the reference photo - even if that kind of object commonly has one. If unsure, leave that area plain rather than inventing something.
+- Do NOT render any text, lettering, or engraving anywhere - leave that area completely plain and blank
+- If the reference photo shows more than one physical unit (e.g. a matching pair or set), depict only ONE single unit`;
+}
+
+async function regenerateSingleView(){
+  const viewKey = document.getElementById('f_singleViewPicker').value;
+  const viewLabel = singleViewLabels[viewKey];
+  const note = document.getElementById('f_singleViewNote').value.trim();
+  const status = document.getElementById('singleViewStatus');
+  if(refImages.length === 0){
+    status.textContent = 'קודם צריך להעלות לפחות תמונת רפרנס אחת.';
+    return;
+  }
+  status.textContent = `🎨 יוצרת מחדש רק את ${viewLabel}...`;
+  try {
+    const resp = await fetch('/api/generate-views', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ images: refImages, prompt: buildSingleViewPrompt(viewLabel, note) })
+    });
+    if(!resp.ok){
+      let errMsg = resp.status;
+      try { const err = await resp.json(); if(err.error) errMsg = err.error; } catch(e){}
+      status.textContent = `יצירה מחדש נכשלה (${errMsg}).`;
+      return;
+    }
+    const data = await resp.json();
+    viewImages[viewKey] = data.image;
+    status.textContent = `✅ ${viewLabel} נוצר מחדש.`;
+    render();
+  } catch(e){
+    status.textContent = 'יצירה מחדש נכשלה (השרת עדיין לא מחובר).';
+  }
+}
+
 async function generateViews(){
   const status = document.getElementById('genStatus');
   if(refImages.length === 0){
@@ -453,6 +504,14 @@ document.addEventListener('DOMContentLoaded', () => {
       box.style.display = 'none';
     }
   });
+
+  document.getElementById('f_singleViewNote').addEventListener('input', (e) => {
+    viewNotes[document.getElementById('f_singleViewPicker').value] = e.target.value;
+  });
+  document.getElementById('f_singleViewPicker').addEventListener('change', (e) => {
+    document.getElementById('f_singleViewNote').value = viewNotes[e.target.value] || '';
+  });
+  document.getElementById('btnRegenerateSingleView').addEventListener('click', regenerateSingleView);
   document.getElementById('btnExport').addEventListener('click', () => window.print());
 
   render();
