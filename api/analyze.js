@@ -16,6 +16,7 @@ Respond with ONLY a single JSON object, no markdown fences, no extra commentary,
   "bottom_opening": { "present": true or false },
   "text_position": { "offsetX_hint": number or null, "offsetY_hint": number or null },
   "text_style": "must be exactly one of: engraved | embossed",
+  "detected_text": "transcribe any text/lettering/inscription visible on the product exactly as written, in its original language and script (e.g. Hebrew) - null or empty string if no text is visible. This is read directly from the photo for reference only, not a substitute for the designer's own precise text/font entry.",
   "notes": "any other detail relevant to a manufacturing spec sheet, in one or two sentences"
 }
 

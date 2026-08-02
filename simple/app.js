@@ -7,6 +7,7 @@ let viewImages = { top:null, bottom:null, front:null, back:null, side:null };
 let dimAnnotations = { top:[], bottom:[], front:[], back:[], side:[] }; // {x1,y1,x2,y2,label} in % coords
 let pendingPoint = null; // {view, x, y} - first click of a dimension-line pair
 let engravedPos = { xPct: 50, yPct: 78 }; // Front-view text overlay position, in % of the box
+let detectedText = null; // text Claude Vision read directly off the product photo - reference only
 
 /* ===================== font library (localStorage) ===================== */
 
@@ -182,7 +183,10 @@ async function autoAnalyzeMaterial(){
       notesEl.value = data.notes;
     }
 
+    detectedText = (data.detected_text && data.detected_text.trim()) ? data.detected_text.trim() : null;
+
     let msg = '🤖 זוהה: ' + [data.material, data.color_name].filter(Boolean).join(', ') + '.';
+    if(detectedText) msg += ` טקסט שזוהה על המוצר: "${detectedText}" (להשוות לטקסט/פונט המדויק שתזיני).`;
     if(data.notes) msg += ' ' + data.notes;
     status.textContent = msg;
     render();
@@ -205,6 +209,35 @@ function dimLineSvg(ann){
     <rect class="dim-text-bg" x="${mx-8}%" y="${my-2.2}%" width="16%" height="4.4%"/>
     <text class="dim-text-overlay" x="${mx}%" y="${my+1.2}%">${label}</text>
   </g>`;
+}
+
+/* automatic overall width/height dimension lines, computed live from the H/W/D fields -
+   always present when those fields are filled, on top of whichever manual lines were added */
+function autoDimLines(viewKey, H, W, D){
+  let widthVal = null, heightVal = null;
+  if(viewKey==='front' || viewKey==='back'){ widthVal = W; heightVal = H; }
+  else if(viewKey==='side'){ widthVal = D; heightVal = H; }
+  else if(viewKey==='top' || viewKey==='bottom'){ widthVal = W; heightVal = D; }
+  let svg = '';
+  if(widthVal){
+    svg += `<g>
+      <line class="dim-line-overlay" x1="8%" y1="95%" x2="92%" y2="95%"/>
+      <line class="dim-tick-overlay" x1="8%" y1="93%" x2="8%" y2="97%"/>
+      <line class="dim-tick-overlay" x1="92%" y1="93%" x2="92%" y2="97%"/>
+      <rect class="dim-text-bg" x="42%" y="91.5%" width="16%" height="6%"/>
+      <text class="dim-text-overlay" x="50%" y="96%">${widthVal}מ"מ</text>
+    </g>`;
+  }
+  if(heightVal){
+    svg += `<g>
+      <line class="dim-line-overlay" x1="5%" y1="8%" x2="5%" y2="92%"/>
+      <line class="dim-tick-overlay" x1="3%" y1="8%" x2="7%" y2="8%"/>
+      <line class="dim-tick-overlay" x1="3%" y1="92%" x2="7%" y2="92%"/>
+      <rect class="dim-text-bg" x="0%" y="47%" width="12%" height="6%"/>
+      <text class="dim-text-overlay" x="5%" y="51.5%" style="font-size:8px">${heightVal}מ"מ</text>
+    </g>`;
+  }
+  return svg;
 }
 
 function handleCanvasClick(viewKey, canvasEl, e){
@@ -236,7 +269,15 @@ function buildSkeleton(){
     <div class="sheet-body">
       <div class="views-grid" id="viewsGrid"></div>
       <div class="side-col">
-        <div class="ref-box"><div class="label">Reference appearance</div><img id="refImgBox" src="" style="display:none"></div>
+        <div class="ref-box">
+          <div class="label">Reference appearance</div>
+          <img id="refImgBox" src="" style="display:none">
+          <div id="detectedTextCaption" class="detected-text-caption"></div>
+        </div>
+        <div class="engraved-box" id="engravedBox" style="display:none">
+          <div class="label">ENGRAVED TEXT (EXACT FONT)</div>
+          <div id="engravedBoxText" class="engraved-box-text"></div>
+        </div>
         <div class="notes-box"><div class="label">MANUFACTURING NOTES</div><ol id="notesList"></ol></div>
       </div>
     </div>
@@ -274,6 +315,19 @@ function render(){
   if(refImageDataUrl){ refImg.src = refImageDataUrl; refImg.style.display = 'block'; }
   else { refImg.style.display = 'none'; }
 
+  document.getElementById('detectedTextCaption').innerHTML = detectedText
+    ? `טקסט שזוהה אוטומטית ע"י AI: <strong>${detectedText}</strong> (לאימות - לא וקטור מדויק)`
+    : '';
+
+  const engravedBox = document.getElementById('engravedBox');
+  if(text && activeFontId){
+    engravedBox.style.display = 'block';
+    document.getElementById('engravedBoxText').innerHTML =
+      `<span style="font-family:'custom-${activeFontId}'; color:${textcolor}">${text}</span>`;
+  } else {
+    engravedBox.style.display = 'none';
+  }
+
   const views = document.getElementById('viewsGrid');
   views.innerHTML = '';
   const labels = [
@@ -287,6 +341,7 @@ function render(){
     const ar = v.key==='section' ? null : aspectFor(v.key, H, W, D, stretchOn);
     const fitMode = (stretchOn && ar) ? 'fill' : 'contain';
     const annotations = (dimAnnotations[v.key]||[]).map(dimLineSvg).join('');
+    const autoDims = v.key==='section' ? '' : autoDimLines(v.key, H, W, D);
     const pendingDot = (pendingPoint && pendingPoint.view===v.key)
       ? `<circle class="dim-point" cx="${pendingPoint.x}%" cy="${pendingPoint.y}%" r="2.5"/>` : '';
     const engravedOverlay = (v.key==='front' && text) ? `<div class="engraved-text-overlay" id="engravedOverlay" style="left:${engravedPos.xPct}%; top:${engravedPos.yPct}%; font-size:${fontsize}px; color:${textcolor}; font-family:${activeFontId?`'custom-${activeFontId}'`:'inherit'}">${text}</div>` : '';
@@ -296,7 +351,7 @@ function render(){
       <div class="view-canvas" id="canvas-${v.key}" style="${ar?`aspect-ratio:${ar}`:''}">
         ${imgSrc ? `<img src="${imgSrc}" style="object-fit:${fitMode}">` : (v.key==='section' ? '<div class="placeholder">שרטוט סכמטי - להוסיף ידנית</div>' : '<div class="placeholder">טרם נוצרה תמונה</div>')}
         ${engravedOverlay}
-        <svg>${annotations}${pendingDot}</svg>
+        <svg>${autoDims}${annotations}${pendingDot}</svg>
       </div>
     `;
     views.appendChild(box);

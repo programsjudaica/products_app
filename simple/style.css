@@ -115,6 +115,11 @@ textarea{resize:vertical}
 .ref-box{border:1px solid #e2ddd2; border-radius:4px; padding:3mm}
 .ref-box .label{font-size:7.5pt; color:#8a8478; text-transform:uppercase; letter-spacing:.06em; margin-bottom:2mm; text-align:center}
 .ref-box img{width:100%; height:auto; max-height:70mm; object-fit:contain; border-radius:2px; background:#f1efe9; display:block; margin:0 auto}
+.detected-text-caption{font-size:7.3pt; color:#8a8478; text-align:center; margin-top:2mm; direction:rtl}
+.detected-text-caption strong{color:#4a453f}
+.engraved-box{border:1px solid #e2ddd2; border-radius:4px; padding:3mm; text-align:center}
+.engraved-box .label{font-size:7.5pt; color:#8a8478; text-transform:uppercase; letter-spacing:.06em; margin-bottom:2mm}
+.engraved-box-text{font-size:20pt; padding:2mm; direction:rtl}
 .notes-box{border:1px solid #e2ddd2; border-radius:4px; padding:4mm; flex:1}
 .notes-box .label{font-size:8pt; font-weight:700; letter-spacing:.05em; margin-bottom:2mm}
 .notes-box ol{margin:0; padding-inline-start:4mm; font-size:7.3pt; line-height:1.55; color:#333}
