@@ -109,7 +109,7 @@ function buildGenerationPrompt(){
   const notesBlock = designerNotes
     ? `\n\nDESIGNER'S NOTES ABOUT THIS SPECIFIC PRODUCT (these are ground truth from the person who actually knows the product - they override any general assumption below if they conflict):\n${designerNotes}\n`
     : '';
-  return `Using the attached photo(s) as reference, generate ONE image containing 6 separate sub-images of this exact same physical product, arranged in a clean 2x3 grid with thin dividing lines and small text labels above each cell.
+  return `Using the attached photo(s) as reference, generate ONE image containing 6 separate sub-images of this exact same physical product, arranged in a clean 2x3 grid with thin dividing lines between cells. Do NOT add any text labels, captions or titles for the cells - the grid position alone identifies each view.
 ${notesBlock}
 
 Grid layout (left to right, top to bottom):
@@ -118,11 +118,11 @@ Row 2: Bottom, Back, Left Side
 
 Requirements for all 6 sub-images:
 - Flat, clean technical/catalog illustration style - no dramatic lighting, no shadows, no reflections, no isometric/3D angle under any circumstances - strictly straight-on orthographic views only
-- Plain solid white background for every cell
+- Plain solid white background for every cell, completely empty - ABSOLUTELY NO text, letters, numbers, watermarks, labels, captions, logos or any marking of any kind anywhere in the white background or empty space around the product. This is a hard rule with zero exceptions.
 - Same exact scale, framing and margins across all 6 cells
 - Preserve the actual materials, colors and textures visible in the reference photo
 - Do NOT add any decorative element, icon, symbol, handle, protrusion or other structural detail that is not visible in the reference photo - even if that kind of object commonly has one (e.g. many cups have handles - do not add one unless you can actually see it in the reference photo). If unsure, leave that area plain rather than inventing something.
-- Do NOT render any text, lettering, or engraving anywhere in any image - leave any text/engraving area completely plain and blank (real text will be added separately as a precise overlay)
+- On the product itself: do NOT render any text/lettering/engraving on the product's surface either - leave any text/engraving area on the product completely plain and blank (real text will be added separately as a precise overlay). To be clear: no text anywhere at all, neither on the product nor around it.
 - If the reference photo shows more than one physical unit (e.g. a matching pair or set), depict only ONE single unit, not both together
 - Back: not visible in the reference photo - do not invent any decorative detail for it. Render only the correct overall silhouette/proportions matching the other views, with the same material/texture, but no engraving.
 - Top, Bottom, Left Side, Right Side: infer the correct silhouette and proportions from the reference photo, consistent with the front view.
@@ -145,10 +145,10 @@ ${notesBlock}
 
 Requirements:
 - Flat, clean technical/catalog illustration style - no dramatic lighting, no shadows, no reflections
-- Plain solid white background, filling the frame with just this one view, no grid, no labels, no other angles
+- Plain solid white background, filling the frame with just this one view, no grid, no labels, no other angles, completely empty otherwise
+- ABSOLUTELY NO text, letters, numbers, watermarks, labels, captions, logos or any marking anywhere - not around the product and not on the product's own surface either. This is a hard rule with zero exceptions (real text will be added separately as a precise overlay).
 - Preserve the actual materials, colors and textures visible in the reference photo
 - Do NOT add any decorative element, icon, symbol, handle, protrusion or other structural detail that is not visible in the reference photo - even if that kind of object commonly has one. If unsure, leave that area plain rather than inventing something.
-- Do NOT render any text, lettering, or engraving anywhere - leave that area completely plain and blank
 - If the reference photo shows more than one physical unit (e.g. a matching pair or set), depict only ONE single unit`;
 }
 
