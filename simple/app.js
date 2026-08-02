@@ -264,10 +264,11 @@ function dimLineSvg(ann, index, viewKey){
     <line class="dim-line-overlay" x1="${x1}%" y1="${y1}%" x2="${x2}%" y2="${y2}%"/>
     <circle class="dim-point" cx="${x1}%" cy="${y1}%" r="2.5"/>
     <circle class="dim-point" cx="${x2}%" cy="${y2}%" r="2.5"/>
-    <rect class="dim-text-bg" x="${mx-8}%" y="${my-2.2}%" width="16%" height="4.4%"/>
-    <text class="dim-text-overlay" x="${mx}%" y="${my+1.2}%">${label}</text>
-    <circle class="dim-remove-btn" data-remove-view="${viewKey}" data-remove-index="${index}" cx="${mx+9}%" cy="${my-3.2}%" r="2.3"/>
-    <text class="dim-remove-x" data-remove-view="${viewKey}" data-remove-index="${index}" x="${mx+9}%" y="${my-2.3}%">✕</text>
+    <g class="dim-removable" data-remove-view="${viewKey}" data-remove-index="${index}">
+      <rect class="dim-text-bg" x="${mx-9}%" y="${my-2.6}%" width="18%" height="5.2%"/>
+      <text class="dim-text-overlay" x="${mx-2.5}%" y="${my+1.2}%">${label}</text>
+      <text class="dim-remove-x" x="${mx+7}%" y="${my+1.2}%">✕</text>
+    </g>
   </g>`;
 }
 
