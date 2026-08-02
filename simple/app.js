@@ -262,8 +262,6 @@ function dimLineSvg(ann, index, viewKey){
   const mx = (x1+x2)/2, my=(y1+y2)/2;
   return `<g>
     <line class="dim-line-overlay" x1="${x1}%" y1="${y1}%" x2="${x2}%" y2="${y2}%"/>
-    <circle class="dim-point" cx="${x1}%" cy="${y1}%" r="2.5"/>
-    <circle class="dim-point" cx="${x2}%" cy="${y2}%" r="2.5"/>
     <g class="dim-removable" data-remove-view="${viewKey}" data-remove-index="${index}">
       <rect class="dim-text-bg" x="${mx-9}%" y="${my-2.6}%" width="18%" height="5.2%"/>
       <text class="dim-text-overlay" x="${mx-2.5}%" y="${my+1.2}%">${label}</text>
