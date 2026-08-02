@@ -105,7 +105,12 @@ function splitGridImage(gridDataUrl){
 }
 
 function buildGenerationPrompt(){
-  return `Using the attached photo as reference, generate ONE image containing 6 separate sub-images of this exact same physical product, arranged in a clean 2x3 grid with thin dividing lines and small text labels above each cell.
+  const designerNotes = txt('f_aiNotes').trim();
+  const notesBlock = designerNotes
+    ? `\n\nDESIGNER'S NOTES ABOUT THIS SPECIFIC PRODUCT (these are ground truth from the person who actually knows the product - they override any general assumption below if they conflict):\n${designerNotes}\n`
+    : '';
+  return `Using the attached photo(s) as reference, generate ONE image containing 6 separate sub-images of this exact same physical product, arranged in a clean 2x3 grid with thin dividing lines and small text labels above each cell.
+${notesBlock}
 
 Grid layout (left to right, top to bottom):
 Row 1: Top, Front, Right Side
@@ -116,7 +121,7 @@ Requirements for all 6 sub-images:
 - Plain solid white background for every cell
 - Same exact scale, framing and margins across all 6 cells
 - Preserve the actual materials, colors and textures visible in the reference photo
-- Do NOT add any decorative element, icon, symbol or detail that is not visible in the reference photo - if unsure, leave that area plain rather than inventing something
+- Do NOT add any decorative element, icon, symbol, handle, protrusion or other structural detail that is not visible in the reference photo - even if that kind of object commonly has one (e.g. many cups have handles - do not add one unless you can actually see it in the reference photo). If unsure, leave that area plain rather than inventing something.
 - Do NOT render any text, lettering, or engraving anywhere in any image - leave any text/engraving area completely plain and blank (real text will be added separately as a precise overlay)
 - If the reference photo shows more than one physical unit (e.g. a matching pair or set), depict only ONE single unit, not both together
 - Back: not visible in the reference photo - do not invent any decorative detail for it. Render only the correct overall silhouette/proportions matching the other views, with the same material/texture, but no engraving.

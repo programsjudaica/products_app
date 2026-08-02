@@ -64,6 +64,9 @@
       <p class="hint">אפשר להעלות כמה תמונות (עד 8) - למשל תמונת הדמייה קדמית + תמונה נוספת מזווית צד. כל התמונות נשלחות יחד גם לניתוח החומר וגם ליצירת 6 התצוגות.</p>
       <input type="file" id="f_refImage" accept="image/*" multiple>
       <div id="refImgPreview" class="img-preview-list"></div>
+      <label>הערות ל-AI לפני יצירה (אופציונלי)
+        <textarea id="f_aiNotes" rows="3" placeholder="* לא חובה, אבל יכול לעזור - למשל: &quot;אין ידיות&quot;, &quot;יש חריץ מטבע במרכז המכסה&quot;, &quot;הבסיס שטוח לגמרי, לא עגול&quot;"></textarea>
+      </label>
       <button type="button" id="btnGenerateViews" class="secondary-btn">🎨 צור 6 תצוגות עם AI (GPT)</button>
       <div id="genStatus" class="hint" style="margin-top:6px"></div>
     </section>
