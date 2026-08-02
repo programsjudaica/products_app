@@ -257,7 +257,7 @@ async function autoAnalyzeMaterial(){
 /* simple click-two-points-type-a-number tool - no vector shape editing, just
    static annotation lines drawn on top of whatever image is already there */
 
-function dimLineSvg(ann){
+function dimLineSvg(ann, index, viewKey){
   const {x1,y1,x2,y2,label} = ann;
   const mx = (x1+x2)/2, my=(y1+y2)/2;
   return `<g>
@@ -266,6 +266,8 @@ function dimLineSvg(ann){
     <circle class="dim-point" cx="${x2}%" cy="${y2}%" r="2.5"/>
     <rect class="dim-text-bg" x="${mx-8}%" y="${my-2.2}%" width="16%" height="4.4%"/>
     <text class="dim-text-overlay" x="${mx}%" y="${my+1.2}%">${label}</text>
+    <circle class="dim-remove-btn" data-remove-view="${viewKey}" data-remove-index="${index}" cx="${mx+9}%" cy="${my-3.2}%" r="2.3"/>
+    <text class="dim-remove-x" data-remove-view="${viewKey}" data-remove-index="${index}" x="${mx+9}%" y="${my-2.3}%">✕</text>
   </g>`;
 }
 
@@ -283,7 +285,7 @@ function autoDimLines(viewKey, H, W, D){
       <line class="dim-tick-overlay" x1="8%" y1="93%" x2="8%" y2="97%"/>
       <line class="dim-tick-overlay" x1="92%" y1="93%" x2="92%" y2="97%"/>
       <rect class="dim-text-bg" x="42%" y="91.5%" width="16%" height="6%"/>
-      <text class="dim-text-overlay" x="50%" y="96%">${widthVal}מ"מ</text>
+      <text class="dim-text-overlay" x="50%" y="96%">${widthVal}mm</text>
     </g>`;
   }
   if(heightVal){
@@ -292,13 +294,22 @@ function autoDimLines(viewKey, H, W, D){
       <line class="dim-tick-overlay" x1="3%" y1="8%" x2="7%" y2="8%"/>
       <line class="dim-tick-overlay" x1="3%" y1="92%" x2="7%" y2="92%"/>
       <rect class="dim-text-bg" x="0%" y="47%" width="12%" height="6%"/>
-      <text class="dim-text-overlay" x="5%" y="51.5%" style="font-size:8px">${heightVal}מ"מ</text>
+      <text class="dim-text-overlay" x="5%" y="51.5%" style="font-size:8px">${heightVal}mm</text>
     </g>`;
   }
   return svg;
 }
 
 function handleCanvasClick(viewKey, canvasEl, e){
+  const removeTarget = e.target.closest('[data-remove-view]');
+  if(removeTarget){
+    const rView = removeTarget.getAttribute('data-remove-view');
+    const rIndex = parseInt(removeTarget.getAttribute('data-remove-index'), 10);
+    dimAnnotations[rView].splice(rIndex, 1);
+    render();
+    return;
+  }
+
   const rect = canvasEl.getBoundingClientRect();
   const xPct = ((e.clientX - rect.left) / rect.width) * 100;
   const yPct = ((e.clientY - rect.top) / rect.height) * 100;
@@ -310,7 +321,7 @@ function handleCanvasClick(viewKey, canvasEl, e){
   }
   const value = prompt('מרחק אמיתי בין שתי הנקודות (מ"מ):');
   if(value && parseFloat(value) > 0){
-    dimAnnotations[viewKey].push({ x1: pendingPoint.x, y1: pendingPoint.y, x2: xPct, y2: yPct, label: parseFloat(value) + 'מ"מ' });
+    dimAnnotations[viewKey].push({ x1: pendingPoint.x, y1: pendingPoint.y, x2: xPct, y2: yPct, label: parseFloat(value) + 'mm' });
   }
   pendingPoint = null;
   render();
@@ -359,14 +370,14 @@ function render(){
   document.querySelector('.sheet-header .title').textContent = (title||'').toUpperCase() + (category ? ' — ' + category : '');
   const material = txt('f_material'), colorname = txt('f_colorname');
   document.querySelector('.sheet-header .meta').innerHTML =
-    `Material: ${material || '—'}<br>Color: ${colorname || '—'}<br>H×W×D: ${H??'—'} × ${W??'—'} × ${D??'—'} מ"מ`;
+    `Material: ${material || '—'}<br>Color: ${colorname || '—'}<br>H×W×D: ${H??'—'} × ${W??'—'} × ${D??'—'} mm`;
 
   const gallery = document.getElementById('refImgGallery');
   gallery.innerHTML = refImages.length === 0 ? '' : refImages.map(src => `<img src="${src}">`).join('');
   gallery.className = 'ref-img-gallery' + (refImages.length <= 1 ? ' single' : '');
 
   document.getElementById('detectedTextCaption').innerHTML = detectedText
-    ? `טקסט שזוהה אוטומטית ע"י AI: <strong>${detectedText}</strong> (לאימות - לא וקטור מדויק)`
+    ? `Text detected automatically by AI: <strong>${detectedText}</strong> (for verification - not exact vector)`
     : '';
 
   const engravedBox = document.getElementById('engravedBox');
@@ -389,7 +400,7 @@ function render(){
     box.className = 'view-box';
     const imgSrc = viewImages[v.key];
     const fitMode = 'contain'; // never distort the AI image - real measurements come from the dimension lines, not from stretching pixels
-    const annotations = (dimAnnotations[v.key]||[]).map(dimLineSvg).join('');
+    const annotations = (dimAnnotations[v.key]||[]).map((ann,i) => dimLineSvg(ann, i, v.key)).join('');
     const autoDims = v.key==='section' ? '' : autoDimLines(v.key, H, W, D);
     const pendingDot = (pendingPoint && pendingPoint.view===v.key)
       ? `<circle class="dim-point" cx="${pendingPoint.x}%" cy="${pendingPoint.y}%" r="2.5"/>` : '';
@@ -398,7 +409,7 @@ function render(){
     box.innerHTML = `
       <div class="label">${v.label}</div>
       <div class="view-canvas" id="canvas-${v.key}">
-        ${imgSrc ? `<img src="${imgSrc}" style="object-fit:${fitMode}">` : (v.key==='section' ? '<div class="placeholder">שרטוט סכמטי - להוסיף ידנית</div>' : '<div class="placeholder">טרם נוצרה תמונה</div>')}
+        ${imgSrc ? `<img src="${imgSrc}" style="object-fit:${fitMode}">` : (v.key==='section' ? '<div class="placeholder">Schematic drawing - add manually</div>' : '<div class="placeholder">Image not generated yet</div>')}
         ${engravedOverlay}
         <svg>${autoDims}${annotations}${pendingDot}</svg>
       </div>

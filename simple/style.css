@@ -105,6 +105,8 @@ textarea{resize:vertical}
 .dim-text-overlay{font-size:9px; fill:#4a453f; text-anchor:middle}
 .dim-text-bg{fill:#fff; opacity:.85}
 .dim-point{fill:#c0392b}
+.dim-remove-btn{fill:#c0392b; cursor:pointer}
+.dim-remove-x{font-size:3.2px; fill:#fff; text-anchor:middle; pointer-events:none}
 
 .engraved-text-overlay{
   position:absolute; white-space:nowrap; cursor:move; user-select:none;
@@ -138,5 +140,6 @@ textarea{resize:vertical}
   .preview-wrap{padding:0; display:block}
   .spec-sheet{box-shadow:none; width:100%; min-height:auto}
   .view-canvas{cursor:default}
+  .dim-remove-btn, .dim-remove-x{display:none}
   @page{size:A4 landscape; margin:8mm}
 }
