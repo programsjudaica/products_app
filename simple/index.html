@@ -86,6 +86,11 @@
       <label>הערה ממוקדת לתצוגה הזו
         <textarea id="f_singleViewNote" rows="2" placeholder="למשל: &quot;הידיות פונות אחורה בזווית של כ-45 מעלות, לא ישר לצדדים&quot;"></textarea>
       </label>
+      <label>תמונת רפרנס ספציפית לתצוגה הזו (אופציונלי)
+        <input type="file" id="f_singleViewRefImage" accept="image/*">
+      </label>
+      <p class="hint">אם יש לך תמונה שמראה בדיוק את הזווית הזו (למשל צילום צד אמיתי) - העלי אותה כאן, בנוסף לתמונות הרפרנס הכלליות למעלה, כדי שה-AI יראה בדיוק למה את מתכוונת.</p>
+      <div id="singleViewImgPreview" class="img-preview-list"></div>
       <button type="button" id="btnRegenerateSingleView" class="secondary-btn">🎨 צור מחדש רק את התצוגה הזו</button>
       <div id="singleViewStatus" class="hint" style="margin-top:6px"></div>
     </section>

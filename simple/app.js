@@ -134,12 +134,14 @@ Output: a single image, exactly a 2x3 grid as specified, each cell clearly label
 
 const singleViewLabels = { top:'Top', bottom:'Bottom', front:'Front', back:'Back', side:'Right Side' };
 let viewNotes = { top:'', bottom:'', front:'', back:'', side:'' }; // remembers a per-view note while switching the picker
+let viewRefImages = { top:null, bottom:null, front:null, back:null, side:null }; // an optional extra reference photo specific to one view
 
-function buildSingleViewPrompt(viewLabel, viewNote){
+function buildSingleViewPrompt(viewLabel, viewNote, hasSpecificImage){
   const globalNotes = txt('f_aiNotes').trim();
   let notesBlock = '';
   if(globalNotes) notesBlock += `\n\nGeneral designer notes about this product (ground truth, overrides assumptions if they conflict): ${globalNotes}`;
   if(viewNote) notesBlock += `\n\nSpecific instructions for THIS view (${viewLabel}) - follow these precisely, they are the most important guidance for this image: ${viewNote}`;
+  if(hasSpecificImage) notesBlock += `\n\nIMPORTANT: the LAST photo attached shows this exact "${viewLabel}" angle directly, photographed specifically for this purpose. Prioritize it as the primary geometric reference for this view over the other photos - match its actual proportions and structure precisely, not just a generic guess.`;
   return `Using the attached photo(s) as reference, generate ONE single image showing ONLY the "${viewLabel}" straight-on orthographic view (no angle, no perspective, no isometric/3D under any circumstances) of this exact physical product.
 ${notesBlock}
 
@@ -156,17 +158,19 @@ async function regenerateSingleView(){
   const viewKey = document.getElementById('f_singleViewPicker').value;
   const viewLabel = singleViewLabels[viewKey];
   const note = document.getElementById('f_singleViewNote').value.trim();
+  const specificImg = viewRefImages[viewKey];
   const status = document.getElementById('singleViewStatus');
-  if(refImages.length === 0){
-    status.textContent = 'קודם צריך להעלות לפחות תמונת רפרנס אחת.';
+  if(refImages.length === 0 && !specificImg){
+    status.textContent = 'קודם צריך להעלות לפחות תמונת רפרנס אחת (כללית או ספציפית לתצוגה).';
     return;
   }
+  const imagesToSend = specificImg ? [...refImages, specificImg] : refImages;
   status.textContent = `🎨 יוצרת מחדש רק את ${viewLabel}...`;
   try {
     const resp = await fetch('/api/generate-views', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ images: refImages, prompt: buildSingleViewPrompt(viewLabel, note) })
+      body: JSON.stringify({ images: imagesToSend, prompt: buildSingleViewPrompt(viewLabel, note, !!specificImg) })
     });
     if(!resp.ok){
       let errMsg = resp.status;
@@ -526,8 +530,22 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('f_singleViewNote').addEventListener('input', (e) => {
     viewNotes[document.getElementById('f_singleViewPicker').value] = e.target.value;
   });
+  function renderSingleViewImgPreview(){
+    const viewKey = document.getElementById('f_singleViewPicker').value;
+    const preview = document.getElementById('singleViewImgPreview');
+    preview.innerHTML = viewRefImages[viewKey] ? `<img src="${viewRefImages[viewKey]}">` : '';
+  }
   document.getElementById('f_singleViewPicker').addEventListener('change', (e) => {
     document.getElementById('f_singleViewNote').value = viewNotes[e.target.value] || '';
+    document.getElementById('f_singleViewRefImage').value = '';
+    renderSingleViewImgPreview();
+  });
+  document.getElementById('f_singleViewRefImage').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const viewKey = document.getElementById('f_singleViewPicker').value;
+    viewRefImages[viewKey] = await fileToDataUrl(file);
+    renderSingleViewImgPreview();
   });
   document.getElementById('btnRegenerateSingleView').addEventListener('click', regenerateSingleView);
   document.getElementById('btnExport').addEventListener('click', () => window.print());
