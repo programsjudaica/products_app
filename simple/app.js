@@ -279,21 +279,29 @@ function autoDimLines(viewKey, H, W, D){
   else if(viewKey==='top' || viewKey==='bottom'){ widthVal = W; heightVal = D; }
   let svg = '';
   if(widthVal){
+    const label = `${widthVal}mm`;
+    const boxW = Math.max(16, label.length * 3.2);
     svg += `<g>
       <line class="dim-line-overlay" x1="8%" y1="95%" x2="92%" y2="95%"/>
       <line class="dim-tick-overlay" x1="8%" y1="93%" x2="8%" y2="97%"/>
       <line class="dim-tick-overlay" x1="92%" y1="93%" x2="92%" y2="97%"/>
-      <rect class="dim-text-bg" x="42%" y="91.5%" width="16%" height="6%"/>
-      <text class="dim-text-overlay" x="50%" y="96%">${widthVal}mm</text>
+      <rect class="dim-text-bg" x="${50-boxW/2}%" y="91.5%" width="${boxW}%" height="6%"/>
+      <text class="dim-text-overlay" x="50%" y="96%" style="direction:ltr">${label}</text>
     </g>`;
   }
   if(heightVal){
+    // anchored to grow rightward from a fixed left inset, instead of centering near x=0 -
+    // centering longer 3-4 digit numbers there pushed them past the edge and got clipped.
+    // direction:ltr is required explicitly - the page is RTL, which flips what "start" anchor
+    // means (it would otherwise grow the text leftward, off the edge, defeating the fix)
+    const label = `${heightVal}mm`;
+    const boxW = Math.max(18, label.length * 4.5);
     svg += `<g>
-      <line class="dim-line-overlay" x1="5%" y1="8%" x2="5%" y2="92%"/>
-      <line class="dim-tick-overlay" x1="3%" y1="8%" x2="7%" y2="8%"/>
-      <line class="dim-tick-overlay" x1="3%" y1="92%" x2="7%" y2="92%"/>
-      <rect class="dim-text-bg" x="0%" y="47%" width="12%" height="6%"/>
-      <text class="dim-text-overlay" x="5%" y="51.5%" style="font-size:8px">${heightVal}mm</text>
+      <line class="dim-line-overlay" x1="9%" y1="8%" x2="9%" y2="92%"/>
+      <line class="dim-tick-overlay" x1="7%" y1="8%" x2="11%" y2="8%"/>
+      <line class="dim-tick-overlay" x1="7%" y1="92%" x2="11%" y2="92%"/>
+      <rect class="dim-text-bg" x="4%" y="46%" width="${boxW}%" height="7%"/>
+      <text class="dim-text-overlay" x="5.5%" y="51%" style="font-size:6.2px; text-anchor:start; direction:ltr">${label}</text>
     </g>`;
   }
   return svg;
