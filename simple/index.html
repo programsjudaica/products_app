@@ -47,10 +47,13 @@
     </section>
 
     <section class="group">
-      <h2>ספריית פונטים (לשימוש חוזר)</h2>
-      <p class="hint">מעלים קובץ פונט (otf/ttf/woff) פעם אחת - הוא נשמר בדפדפן ואפשר לבחור בו שוב במוצרים הבאים.</p>
+      <h2>ספריית פונטים (משותפת לכל המעצבות)</h2>
+      <p class="hint">מעלים קובץ פונט (otf/ttf/woff) פעם אחת - הוא נשמר בשרת המשותף וזמין לבחירה לכל מעצבת, בכל מוצר הבא.</p>
       <input type="file" id="f_fontUpload" accept=".ttf,.otf,.woff,.woff2">
-      <div id="fontLibraryList" class="chip-list"></div>
+      <label>פונט פעיל
+        <select id="fontLibrarySelect" size="5"></select>
+      </label>
+      <div id="fontLibraryStatus" class="hint"></div>
       <label>טקסט חרוט/מודפס <input type="text" id="f_text" dir="rtl" placeholder="צדקה"></label>
       <div class="row3">
         <label>גודל (מ"מ יחסי) <input type="number" id="f_fontsize" value="14"></label>
@@ -96,6 +99,16 @@
     </section>
 
     <section class="group">
+      <h2>פרויקטים שמורים (משותף לכל המעצבות)</h2>
+      <p class="hint">פרויקט נשמר רק כשבוחרים "כן" בשאלה שמופיעה בלחיצה על ייצוא PDF - אין שמירה אוטומטית.</p>
+      <label>טעינת פרויקט קודם
+        <select id="savedProjectsSelect"><option value="">— בחרי פרויקט —</option></select>
+      </label>
+      <button type="button" id="btnLoadProject" class="secondary-btn">📂 טען פרויקט נבחר</button>
+      <div id="loadProjectStatus" class="hint" style="margin-top:6px"></div>
+    </section>
+
+    <section class="group">
       <h2>הערות ייצור</h2>
       <textarea id="f_notes" rows="8" placeholder="לדוגמה:
 Overall dimensions: ... mm.
@@ -105,6 +118,7 @@ Supplier to confirm draft angles, shrinkage allowance and final wall thickness b
 
     <p class="hint" style="text-align:center">קובץ ה-PDF שייווצר נפתח ישירות באילוסטרייטור - הטקסט וקווי המידה בו הם וקטור אמיתי הניתן לעריכה. תמונות ה-AI עצמן יישארו כתמונה מוטבעת (raster) - זו מגבלה מובנית, אין אפשרות "להפוך" תמונת AI לוקטור.</p>
     <button id="btnExport" class="export-btn">ייצוא PDF (לעריכה באילוסטרייטור או להדפסה)</button>
+    <div id="exportStatus" class="hint" style="margin-top:6px; text-align:center"></div>
   </aside>
 
   <main class="preview-wrap">

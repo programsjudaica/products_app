@@ -1,6 +1,6 @@
 /* ===================== state ===================== */
 
-let fontLibrary = [];          // [{id, name, dataUrl}]
+let fontLibrary = [];          // [{id, name, url}] - shared across all designers, from /api/fonts
 let activeFontId = null;
 let refImages = []; // data URLs, max 8
 let viewImages = { top:null, bottom:null, front:null, back:null, side:null };
@@ -9,14 +9,24 @@ let pendingPoint = null; // {view, x, y} - first click of a dimension-line pair
 let engravedPos = { xPct: 50, yPct: 78 }; // Front-view text overlay position, in % of the box
 let detectedText = null; // text Claude Vision read directly off the product photo - reference only
 
-/* ===================== font library (localStorage) ===================== */
+/* ===================== font library (shared, /api/fonts) ===================== */
+/* Font ids are Vercel Blob pathnames (e.g. "fonts/171..._MyFont.ttf") - not safe to use
+   directly as a CSS font-family name, so cssSafeId() strips it down to [a-zA-Z0-9_]. */
 
-function loadFontLibrary(){
-  try { fontLibrary = JSON.parse(localStorage.getItem('specapp_fontLibrary') || '[]'); }
-  catch(e){ fontLibrary = []; }
-}
-function saveFontLibrary(){
-  localStorage.setItem('specapp_fontLibrary', JSON.stringify(fontLibrary));
+function cssSafeId(id){ return String(id).replace(/[^a-zA-Z0-9]/g, '_'); }
+
+async function fetchFontLibrary(){
+  const status = document.getElementById('fontLibraryStatus');
+  try {
+    const resp = await fetch('/api/fonts');
+    if(!resp.ok) throw new Error(resp.status);
+    const data = await resp.json();
+    fontLibrary = data.fonts || [];
+    injectFontFaces();
+    renderFontLibrarySelect();
+  } catch(e){
+    if(status) status.textContent = 'לא ניתן לטעון כרגע את ספריית הפונטים המשותפת.';
+  }
 }
 function injectFontFaces(){
   let styleEl = document.getElementById('dynamicFontFaces');
@@ -26,37 +36,18 @@ function injectFontFaces(){
     document.head.appendChild(styleEl);
   }
   styleEl.textContent = fontLibrary.map(f =>
-    `@font-face { font-family: "custom-${f.id}"; src: url("${f.dataUrl}"); }`
+    `@font-face { font-family: "custom-${cssSafeId(f.id)}"; src: url("${f.url}"); }`
   ).join('\n');
 }
-function renderFontLibraryList(){
-  const box = document.getElementById('fontLibraryList');
-  if(fontLibrary.length === 0){ box.innerHTML = '<span class="hint">אין פונטים שמורים עדיין</span>'; return; }
-  box.innerHTML = fontLibrary.map(f => `
-    <span class="chip ${f.id===activeFontId?'active':''}" data-font-id="${f.id}">
-      ${f.name}<button type="button" data-remove-font="${f.id}">✕</button>
-    </span>
-  `).join('');
-  box.querySelectorAll('.chip').forEach(chip => {
-    chip.addEventListener('click', (e) => {
-      if(e.target.matches('[data-remove-font]')) return;
-      activeFontId = chip.getAttribute('data-font-id');
-      renderFontLibraryList();
-      render();
-    });
-  });
-  box.querySelectorAll('[data-remove-font]').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const id = btn.getAttribute('data-remove-font');
-      fontLibrary = fontLibrary.filter(f => f.id !== id);
-      if(activeFontId === id) activeFontId = null;
-      saveFontLibrary();
-      injectFontFaces();
-      renderFontLibraryList();
-      render();
-    });
-  });
+function renderFontLibrarySelect(){
+  const sel = document.getElementById('fontLibrarySelect');
+  if(fontLibrary.length === 0){
+    sel.innerHTML = '<option value="">אין פונטים משותפים עדיין - העלי קובץ פונט למעלה</option>';
+    return;
+  }
+  sel.innerHTML = '<option value="">— ללא פונט —</option>' + fontLibrary.map(f =>
+    `<option value="${f.id}" ${f.id===activeFontId ? 'selected' : ''}>${f.name}</option>`
+  ).join('');
 }
 
 /* ===================== helpers ===================== */
@@ -257,6 +248,101 @@ async function autoAnalyzeMaterial(){
   }
 }
 
+/* ===================== saved projects (shared, /api/projects) ===================== */
+/* Projects are NEVER auto-saved - only when the designer confirms "yes" in the dialog
+   shown by the export button, right before printing. */
+
+const projectFieldIds = [
+  'f_code','f_title','f_category','f_rev','f_date',
+  'f_material','f_colorname','f_color',
+  'd_H','d_W','d_D',
+  'f_text','f_fontsize','f_textcolor','f_aiNotes','f_notes'
+];
+
+function collectProjectState(){
+  const fields = {};
+  projectFieldIds.forEach(id => { fields[id] = document.getElementById(id).value; });
+  return {
+    fields, activeFontId, refImages, viewImages, dimAnnotations,
+    engravedPos, detectedText, viewNotes, viewRefImages
+  };
+}
+
+function applyProjectState(state){
+  if(!state) return;
+  const fields = state.fields || {};
+  projectFieldIds.forEach(id => {
+    const el = document.getElementById(id);
+    if(el && fields[id] !== undefined) el.value = fields[id];
+  });
+  activeFontId = state.activeFontId || null;
+  refImages = state.refImages || [];
+  viewImages = state.viewImages || { top:null, bottom:null, front:null, back:null, side:null };
+  dimAnnotations = state.dimAnnotations || { top:[], bottom:[], front:[], back:[], side:[] };
+  engravedPos = state.engravedPos || { xPct:50, yPct:78 };
+  detectedText = state.detectedText || null;
+  viewNotes = state.viewNotes || { top:'', bottom:'', front:'', back:'', side:'' };
+  viewRefImages = state.viewRefImages || { top:null, bottom:null, front:null, back:null, side:null };
+
+  document.getElementById('refImgPreview').innerHTML = refImages.map(src => `<img src="${src}">`).join('');
+  renderFontLibrarySelect();
+  render();
+}
+
+async function saveProject(){
+  const status = document.getElementById('exportStatus');
+  if(status) status.textContent = '⏳ שומר את הפרויקט...';
+  try {
+    const resp = await fetch('/api/projects', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ code: txt('f_code') || 'untitled', title: txt('f_title') || '', data: collectProjectState() })
+    });
+    if(!resp.ok){
+      let errMsg = resp.status;
+      try { const err = await resp.json(); if(err.error) errMsg = err.error; } catch(e){}
+      if(status) status.textContent = `שמירת הפרויקט נכשלה (${errMsg}) - ה-PDF יורד בכל זאת.`;
+      return;
+    }
+    if(status) status.textContent = '✅ הפרויקט נשמר לשימוש חוזר.';
+    fetchSavedProjects();
+  } catch(e){
+    if(status) status.textContent = 'שמירת הפרויקט נכשלה (השרת עדיין לא מחובר) - ה-PDF יורד בכל זאת.';
+  }
+}
+
+async function fetchSavedProjects(){
+  try {
+    const resp = await fetch('/api/projects');
+    if(!resp.ok) throw new Error(resp.status);
+    const data = await resp.json();
+    const sel = document.getElementById('savedProjectsSelect');
+    const projects = data.projects || [];
+    sel.innerHTML = '<option value="">— בחרי פרויקט —</option>' + projects.map(p =>
+      `<option value="${p.url}">${p.code}${p.title ? ' – ' + p.title : ''} (${new Date(p.uploadedAt).toLocaleDateString('he-IL')})</option>`
+    ).join('');
+  } catch(e){
+    // not critical if this list fails to load - saving/exporting still works
+  }
+}
+
+async function loadSelectedProject(){
+  const sel = document.getElementById('savedProjectsSelect');
+  const url = sel.value;
+  const status = document.getElementById('loadProjectStatus');
+  if(!url){ status.textContent = 'בחרי פרויקט מהרשימה קודם.'; return; }
+  status.textContent = '⏳ טוען פרויקט...';
+  try {
+    const resp = await fetch(url);
+    if(!resp.ok) throw new Error(resp.status);
+    const state = await resp.json();
+    applyProjectState(state);
+    status.textContent = '✅ הפרויקט נטען.';
+  } catch(e){
+    status.textContent = 'טעינת הפרויקט נכשלה.';
+  }
+}
+
 /* ===================== dimension-line annotation tool ===================== */
 /* simple click-two-points-type-a-number tool - no vector shape editing, just
    static annotation lines drawn on top of whatever image is already there */
@@ -395,7 +481,7 @@ function render(){
   if(text && activeFontId){
     engravedBox.style.display = 'block';
     document.getElementById('engravedBoxText').innerHTML =
-      `<span style="font-family:'custom-${activeFontId}'; color:${textcolor}">${text}</span>`;
+      `<span style="font-family:'custom-${cssSafeId(activeFontId)}'; color:${textcolor}">${text}</span>`;
   } else {
     engravedBox.style.display = 'none';
   }
@@ -415,7 +501,7 @@ function render(){
     const autoDims = v.key==='section' ? '' : autoDimLines(v.key, H, W, D);
     const pendingDot = (pendingPoint && pendingPoint.view===v.key)
       ? `<circle class="dim-point" cx="${pendingPoint.x}%" cy="${pendingPoint.y}%" r="2.5"/>` : '';
-    const engravedOverlay = (v.key==='front' && text) ? `<div class="engraved-text-overlay" id="engravedOverlay" style="left:${engravedPos.xPct}%; top:${engravedPos.yPct}%; font-size:${fontsize}px; color:${textcolor}; font-family:${activeFontId?`'custom-${activeFontId}'`:'inherit'}">${text}</div>` : '';
+    const engravedOverlay = (v.key==='front' && text) ? `<div class="engraved-text-overlay" id="engravedOverlay" style="left:${engravedPos.xPct}%; top:${engravedPos.yPct}%; font-size:${fontsize}px; color:${textcolor}; font-family:${activeFontId?`'custom-${cssSafeId(activeFontId)}'`:'inherit'}">${text}</div>` : '';
 
     box.innerHTML = `
       <div class="label">${v.label}</div>
@@ -472,26 +558,49 @@ document.addEventListener('DOMContentLoaded', () => {
   buildSkeleton();
   document.getElementById('f_date').valueAsDate = new Date();
 
-  loadFontLibrary();
-  injectFontFaces();
-  renderFontLibraryList();
+  fetchFontLibrary();
+  fetchSavedProjects();
 
   document.querySelectorAll('.panel input, .panel select, .panel textarea')
     .forEach(el => el.addEventListener('input', render));
 
+  document.getElementById('fontLibrarySelect').addEventListener('change', (e) => {
+    activeFontId = e.target.value || null;
+    render();
+  });
+
   document.getElementById('f_fontUpload').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if(!file) return;
-    const dataUrl = await fileToDataUrl(file);
-    const id = 'f' + Date.now();
-    const name = file.name.replace(/\.[^.]+$/, '');
-    fontLibrary.push({ id, name, dataUrl });
-    activeFontId = id;
-    saveFontLibrary();
-    injectFontFaces();
-    renderFontLibraryList();
-    render();
+    const status = document.getElementById('fontLibraryStatus');
+    status.textContent = '⏳ מעלה פונט לספרייה המשותפת...';
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      const resp = await fetch('/api/fonts', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ name: file.name, dataUrl })
+      });
+      if(!resp.ok){
+        let errMsg = resp.status;
+        try { const err = await resp.json(); if(err.error) errMsg = err.error; } catch(err){}
+        status.textContent = `העלאת הפונט נכשלה (${errMsg}).`;
+        return;
+      }
+      const newFont = await resp.json();
+      fontLibrary.push(newFont);
+      activeFontId = newFont.id;
+      injectFontFaces();
+      renderFontLibrarySelect();
+      status.textContent = `✅ הפונט "${newFont.name}" נשמר בספרייה המשותפת.`;
+      render();
+    } catch(err){
+      status.textContent = 'העלאת הפונט נכשלה (השרת עדיין לא מחובר).';
+    }
+    e.target.value = '';
   });
+
+  document.getElementById('btnLoadProject').addEventListener('click', loadSelectedProject);
 
   document.getElementById('f_refImage').addEventListener('change', async (e) => {
     const files = Array.from(e.target.files).slice(0,8);
@@ -548,7 +657,14 @@ document.addEventListener('DOMContentLoaded', () => {
     renderSingleViewImgPreview();
   });
   document.getElementById('btnRegenerateSingleView').addEventListener('click', regenerateSingleView);
-  document.getElementById('btnExport').addEventListener('click', () => window.print());
+
+  document.getElementById('btnExport').addEventListener('click', async () => {
+    const wantsSave = confirm('האם לשמור את הפרויקט לפעם הבאה?');
+    if(wantsSave){
+      await saveProject();
+    }
+    window.print();
+  });
 
   render();
 });
