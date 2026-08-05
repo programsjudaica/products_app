@@ -3,22 +3,37 @@
 // version). No database needed - the display name is encoded into the blob's pathname,
 // so a plain list() call is enough to reconstruct the font list.
 //
-// GET  -> { fonts: [{ id, name, url }, ...] }
-// POST { name, dataUrl } -> { id, name, url }   (dataUrl = base64 font file, e.g. from FileReader)
+// The blob store on this account is private-access only, so uploads use access:'private'
+// and reads happen server-side (with the Bearer token) instead of handing the browser a
+// public blob URL - the browser gets the font back as a data URL, exactly like the old
+// localStorage version did, so @font-face keeps working unchanged.
+//
+// GET  -> { fonts: [{ id, name, dataUrl }, ...] }
+// POST { name, dataUrl } -> { id, name, dataUrl }   (dataUrl = base64 font file, e.g. from FileReader)
 
 const { put, list } = require('@vercel/blob');
+
+async function fetchBlobAsDataUrl(url, contentType){
+  const token = process.env.BLOB_READ_WRITE_TOKEN;
+  const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!resp.ok) throw new Error('Failed to read stored font (' + resp.status + ')');
+  const buffer = Buffer.from(await resp.arrayBuffer());
+  const type = contentType || resp.headers.get('content-type') || 'application/octet-stream';
+  return `data:${type};base64,${buffer.toString('base64')}`;
+}
 
 module.exports = async (req, res) => {
   try {
     if (req.method === 'GET') {
       const { blobs } = await list({ prefix: 'fonts/' });
-      const fonts = blobs.map(b => {
+      const fonts = await Promise.all(blobs.map(async b => {
         const filename = b.pathname.split('/').pop();
         const sepIndex = filename.indexOf('__');
         const rawName = sepIndex >= 0 ? filename.slice(sepIndex + 2) : filename;
         const name = decodeURIComponent(rawName.replace(/\.[^.]+$/, ''));
-        return { id: b.pathname, name, url: b.url };
-      });
+        const dataUrl = await fetchBlobAsDataUrl(b.url, b.contentType);
+        return { id: b.pathname, name, dataUrl };
+      }));
       fonts.sort((a, b) => a.name.localeCompare(b.name));
       res.status(200).json({ fonts });
       return;
@@ -36,8 +51,8 @@ module.exports = async (req, res) => {
       const baseName = name.replace(/\.[^.]+$/, '');
       const safeName = encodeURIComponent(baseName);
       const pathname = `fonts/${Date.now()}__${safeName}.${ext}`;
-      const blob = await put(pathname, buffer, { access: 'public', contentType: mimeType });
-      res.status(200).json({ id: blob.pathname, name: baseName, url: blob.url });
+      const blob = await put(pathname, buffer, { access: 'private', contentType: mimeType });
+      res.status(200).json({ id: blob.pathname, name: baseName, dataUrl });
       return;
     }
 
@@ -47,4 +62,4 @@ module.exports = async (req, res) => {
   }
 };
 
-module.exports.config = { maxDuration: 20 };
+module.exports.config = { maxDuration: 30 };

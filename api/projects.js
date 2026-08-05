@@ -3,14 +3,37 @@
 // there is no auto-save. Each project is one JSON blob holding the full app state
 // (form fields, reference images, generated AI views, dimension lines, font/text choice).
 //
-// GET  -> { projects: [{ id, code, title, url, uploadedAt }, ...] }   (list only, no full data)
-// POST { code, title, data } -> { id, url }   (data = full state object, saved as-is)
+// The blob store on this account is private-access only, so uploads use access:'private'
+// and reads happen server-side (with the Bearer token) - the browser never talks to the
+// blob store directly, only to this endpoint.
+//
+// GET              -> { projects: [{ id, code, title, uploadedAt }, ...] }   (list only, no full data)
+// GET ?id=<blobId>  -> { data }   (full saved state for one project)
+// POST { code, title, data } -> { id }   (data = full state object, saved as-is)
 
 const { put, list } = require('@vercel/blob');
+
+async function fetchBlobJson(url){
+  const token = process.env.BLOB_READ_WRITE_TOKEN;
+  const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!resp.ok) throw new Error('Failed to read stored project (' + resp.status + ')');
+  return resp.json();
+}
 
 module.exports = async (req, res) => {
   try {
     if (req.method === 'GET') {
+      const id = req.query && req.query.id;
+
+      if (id) {
+        const { blobs } = await list({ prefix: id });
+        const match = blobs.find(b => b.pathname === id);
+        if (!match) { res.status(404).json({ error: 'Project not found' }); return; }
+        const data = await fetchBlobJson(match.url);
+        res.status(200).json({ data });
+        return;
+      }
+
       const { blobs } = await list({ prefix: 'projects/' });
       const projects = blobs.map(b => {
         const filename = b.pathname.split('/').pop();
@@ -22,7 +45,6 @@ module.exports = async (req, res) => {
           id: b.pathname,
           code: code || label,
           title: titleParts.join('__') || '',
-          url: b.url,
           uploadedAt: b.uploadedAt
         };
       });
@@ -37,8 +59,8 @@ module.exports = async (req, res) => {
       const safeCode = encodeURIComponent(code || 'untitled');
       const safeTitle = encodeURIComponent(title || '');
       const pathname = `projects/${Date.now()}__${safeCode}__${safeTitle}.json`;
-      const blob = await put(pathname, JSON.stringify(data), { access: 'public', contentType: 'application/json' });
-      res.status(200).json({ id: blob.pathname, url: blob.url });
+      const blob = await put(pathname, JSON.stringify(data), { access: 'private', contentType: 'application/json' });
+      res.status(200).json({ id: blob.pathname });
       return;
     }
 
@@ -48,4 +70,4 @@ module.exports = async (req, res) => {
   }
 };
 
-module.exports.config = { maxDuration: 20 };
+module.exports.config = { maxDuration: 30 };

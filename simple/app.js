@@ -36,7 +36,7 @@ function injectFontFaces(){
     document.head.appendChild(styleEl);
   }
   styleEl.textContent = fontLibrary.map(f =>
-    `@font-face { font-family: "custom-${cssSafeId(f.id)}"; src: url("${f.url}"); }`
+    `@font-face { font-family: "custom-${cssSafeId(f.id)}"; src: url("${f.dataUrl}"); }`
   ).join('\n');
 }
 function renderFontLibrarySelect(){
@@ -319,7 +319,7 @@ async function fetchSavedProjects(){
     const sel = document.getElementById('savedProjectsSelect');
     const projects = data.projects || [];
     sel.innerHTML = '<option value="">— בחרי פרויקט —</option>' + projects.map(p =>
-      `<option value="${p.url}">${p.code}${p.title ? ' – ' + p.title : ''} (${new Date(p.uploadedAt).toLocaleDateString('he-IL')})</option>`
+      `<option value="${p.id}">${p.code}${p.title ? ' – ' + p.title : ''} (${new Date(p.uploadedAt).toLocaleDateString('he-IL')})</option>`
     ).join('');
   } catch(e){
     // not critical if this list fails to load - saving/exporting still works
@@ -328,15 +328,15 @@ async function fetchSavedProjects(){
 
 async function loadSelectedProject(){
   const sel = document.getElementById('savedProjectsSelect');
-  const url = sel.value;
+  const id = sel.value;
   const status = document.getElementById('loadProjectStatus');
-  if(!url){ status.textContent = 'בחרי פרויקט מהרשימה קודם.'; return; }
+  if(!id){ status.textContent = 'בחרי פרויקט מהרשימה קודם.'; return; }
   status.textContent = '⏳ טוען פרויקט...';
   try {
-    const resp = await fetch(url);
+    const resp = await fetch('/api/projects?id=' + encodeURIComponent(id));
     if(!resp.ok) throw new Error(resp.status);
-    const state = await resp.json();
-    applyProjectState(state);
+    const result = await resp.json();
+    applyProjectState(result.data);
     status.textContent = '✅ הפרויקט נטען.';
   } catch(e){
     status.textContent = 'טעינת הפרויקט נכשלה.';
