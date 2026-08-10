@@ -109,6 +109,10 @@ textarea{resize:vertical}
 .dim-removable:hover .dim-text-bg{fill:#f8d7d7}
 .dim-removable:hover .dim-text-overlay{fill:#a34a4a}
 .dim-remove-x{font-size:8px; fill:#a34a4a; font-weight:700}
+.relief-point{fill:var(--accent); stroke:#fff; stroke-width:.5}
+
+.mode-btn{flex:1}
+.mode-btn.active{background:var(--accent); color:#fff}
 
 .engraved-text-overlay{
   position:absolute; white-space:nowrap; cursor:move; user-select:none;

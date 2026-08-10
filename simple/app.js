@@ -10,6 +10,8 @@ let engravedPos = { xPct: 50, yPct: 78 }; // Front-view text overlay position, i
 let detectedText = null; // text Claude Vision read directly off the product photo - reference only
 let vectorGraphics = []; // [{id, name, svgMarkup, xPct, yPct, widthPct, rotationDeg}] - uploaded SVG logos/graphics, placed on a dedicated "Front without text" box
 let activeGraphicId = null;
+let reliefAnnotations = { top:[], bottom:[], front:[], back:[], side:[] }; // {xPct,yPct,type,values,label} - 3D structural features (engraving/protrusion/curve/stripe/recess)
+let annotationMode = 'dimension'; // 'dimension' | 'relief' - which tool a click on a view-canvas triggers
 
 /* ===================== font library (shared, /api/fonts) ===================== */
 /* Font ids are Vercel Blob pathnames (e.g. "fonts/171..._MyFont.ttf") - not safe to use
@@ -328,7 +330,7 @@ function collectProjectState(){
   return {
     fields, activeFontId, refImages, viewImages, dimAnnotations,
     engravedPos, detectedText, viewNotes, viewRefImages,
-    vectorGraphics, activeGraphicId
+    vectorGraphics, activeGraphicId, reliefAnnotations
   };
 }
 
@@ -349,6 +351,7 @@ function applyProjectState(state){
   viewRefImages = state.viewRefImages || { top:null, bottom:null, front:null, back:null, side:null };
   vectorGraphics = state.vectorGraphics || [];
   activeGraphicId = state.activeGraphicId || null;
+  reliefAnnotations = state.reliefAnnotations || { top:[], bottom:[], front:[], back:[], side:[] };
 
   document.getElementById('refImgPreview').innerHTML = refImages.map(src => `<img src="${src}">`).join('');
   renderFontLibrarySelect();
@@ -410,6 +413,59 @@ async function loadSelectedProject(){
   }
 }
 
+/* ===================== 3D/relief element annotation tool ===================== */
+/* Not real 3D geometry - like a dimension line, this is a marked point + a manufacturing
+   callout (depth/height/radius numbers), the same spirit as an engineering-drawing leader line. */
+
+const reliefTypes = {
+  engraving: { label: 'חריטה', labelEn: 'ENGRAVED', fields: [ {key:'depth', label:'עומק (מ״מ)'}, {key:'width', label:'רוחב (מ״מ)'} ] },
+  protrusion: { label: 'בליטה', labelEn: 'RAISED', fields: [ {key:'height', label:'גובה (מ״מ)'}, {key:'width', label:'רוחב (מ״מ)'} ] },
+  curve: { label: 'עיקול', labelEn: 'CURVED', fields: [ {key:'radius', label:'רדיוס (מ״מ)'} ] },
+  stripe: { label: 'פס דקורטיבי', labelEn: 'STRIPE', fields: [ {key:'width', label:'רוחב (מ״מ)'}, {key:'thickness', label:'עובי (מ״מ)'} ] },
+  recess: { label: 'שקע', labelEn: 'RECESSED', fields: [ {key:'depth', label:'עומק (מ״מ)'}, {key:'width', label:'רוחב (מ״מ)'} ] }
+};
+
+function reliefMarkerSvg(ann, index, viewKey){
+  const {xPct, yPct, label} = ann;
+  const boxW = Math.max(20, label.length * 2.3);
+  const labelY = Math.max(4, yPct - 9);
+  return `<g>
+    <line class="dim-line-overlay" x1="${xPct}%" y1="${yPct}%" x2="${xPct}%" y2="${labelY+2}%"/>
+    <circle class="relief-point" cx="${xPct}%" cy="${yPct}%" r="1.6%"/>
+    <g class="dim-removable" data-relief-remove-view="${viewKey}" data-relief-remove-index="${index}">
+      <rect class="dim-text-bg" x="${xPct-boxW/2}%" y="${labelY-2.6}%" width="${boxW}%" height="5.2%"/>
+      <text class="dim-text-overlay" x="${xPct-boxW/2+2}%" y="${labelY+0.6}%" style="direction:ltr; text-anchor:start; font-size:6.5px">${label}</text>
+      <text class="dim-remove-x" x="${xPct+boxW/2-2}%" y="${labelY+0.6}%">✕</text>
+    </g>
+  </g>`;
+}
+
+function handleReliefClick(viewKey, canvasEl, e){
+  const typeKeys = Object.keys(reliefTypes);
+  const typeChoices = typeKeys.map(k => `${reliefTypes[k].label} (${k})`).join('\n');
+  const typeInput = prompt(`סוג האלמנט - הקלידי אחת מהמילים:\n${typeChoices}`);
+  if(!typeInput) return;
+  const trimmed = typeInput.trim();
+  const matchedType = typeKeys.find(k => k === trimmed.toLowerCase() || reliefTypes[k].label === trimmed);
+  if(!matchedType){ alert('סוג לא מזוהה - לחצי שוב על התמונה ונסי להקליד בדיוק אחת מהמילים מהרשימה.'); return; }
+
+  const values = {};
+  for(const field of reliefTypes[matchedType].fields){
+    const v = prompt(`${field.label}:`);
+    if(v === null) return;
+    values[field.key] = parseFloat(v) || 0;
+  }
+
+  const rect = canvasEl.getBoundingClientRect();
+  const xPct = ((e.clientX - rect.left) / rect.width) * 100;
+  const yPct = ((e.clientY - rect.top) / rect.height) * 100;
+  const label = reliefTypes[matchedType].labelEn + ' · ' +
+    reliefTypes[matchedType].fields.map(f => `${f.key} ${values[f.key]}mm`).join(' · ');
+
+  reliefAnnotations[viewKey].push({ xPct, yPct, type: matchedType, values, label });
+  render();
+}
+
 /* ===================== dimension-line annotation tool ===================== */
 /* simple click-two-points-type-a-number tool - no vector shape editing, just
    static annotation lines drawn on top of whatever image is already there */
@@ -464,13 +520,26 @@ function autoDimLines(viewKey, H, W, D){
   return svg;
 }
 
-function handleCanvasClick(viewKey, canvasEl, e){
-  const removeTarget = e.target.closest('[data-remove-view]');
-  if(removeTarget){
-    const rView = removeTarget.getAttribute('data-remove-view');
-    const rIndex = parseInt(removeTarget.getAttribute('data-remove-index'), 10);
+function handleViewCanvasClick(viewKey, canvasEl, e){
+  const removeDimTarget = e.target.closest('[data-remove-view]');
+  if(removeDimTarget){
+    const rView = removeDimTarget.getAttribute('data-remove-view');
+    const rIndex = parseInt(removeDimTarget.getAttribute('data-remove-index'), 10);
     dimAnnotations[rView].splice(rIndex, 1);
     render();
+    return;
+  }
+  const removeReliefTarget = e.target.closest('[data-relief-remove-view]');
+  if(removeReliefTarget){
+    const rView = removeReliefTarget.getAttribute('data-relief-remove-view');
+    const rIndex = parseInt(removeReliefTarget.getAttribute('data-relief-remove-index'), 10);
+    reliefAnnotations[rView].splice(rIndex, 1);
+    render();
+    return;
+  }
+
+  if(annotationMode === 'relief'){
+    handleReliefClick(viewKey, canvasEl, e);
     return;
   }
 
@@ -609,6 +678,7 @@ function render(){
     const imgSrc = viewImages[v.key];
     const fitMode = 'contain'; // never distort the AI image - real measurements come from the dimension lines, not from stretching pixels
     const annotations = (dimAnnotations[v.key]||[]).map((ann,i) => dimLineSvg(ann, i, v.key)).join('');
+    const reliefMarkers = (reliefAnnotations[v.key]||[]).map((ann,i) => reliefMarkerSvg(ann, i, v.key)).join('');
     const autoDims = v.key==='section' ? '' : autoDimLines(v.key, H, W, D);
     const pendingDot = (pendingPoint && pendingPoint.view===v.key)
       ? `<circle class="dim-point" cx="${pendingPoint.x}%" cy="${pendingPoint.y}%" r="2.5"/>` : '';
@@ -619,7 +689,7 @@ function render(){
       <div class="view-canvas" id="canvas-${v.key}">
         ${imgSrc ? `<img src="${imgSrc}" style="object-fit:${fitMode}">` : (v.key==='section' ? '<div class="placeholder">Schematic drawing - add manually</div>' : '<div class="placeholder">Image not generated yet</div>')}
         ${engravedOverlay}
-        <svg>${autoDims}${annotations}${pendingDot}</svg>
+        <svg>${autoDims}${annotations}${reliefMarkers}${pendingDot}</svg>
       </div>
     `;
     views.appendChild(box);
@@ -628,7 +698,7 @@ function render(){
       const canvasEl = box.querySelector('.view-canvas');
       canvasEl.addEventListener('click', (e) => {
         if(e.target.closest('.engraved-text-overlay')) return;
-        handleCanvasClick(v.key, canvasEl, e);
+        handleViewCanvasClick(v.key, canvasEl, e);
       });
     }
   });
@@ -657,7 +727,13 @@ function render(){
 
   const notesList = document.getElementById('notesList');
   const lines = txt('f_notes').split('\n').map(l=>l.trim()).filter(Boolean);
-  notesList.innerHTML = lines.map(l=>`<li>${l}</li>`).join('');
+  const reliefNoteLines = [];
+  Object.keys(reliefAnnotations).forEach(viewKey => {
+    reliefAnnotations[viewKey].forEach(ann => {
+      reliefNoteLines.push(`${viewKey.toUpperCase()}: ${ann.label}`);
+    });
+  });
+  notesList.innerHTML = [...lines, ...reliefNoteLines].map(l=>`<li>${l}</li>`).join('');
 
   document.getElementById('footerRev').textContent =
     `REV. ${rev || '01'} | ${date ? new Date(date).toLocaleDateString('en-GB').replace(/\//g,' ').toUpperCase() : ''}`;
@@ -712,6 +788,15 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('btnLoadProject').addEventListener('click', loadSelectedProject);
+
+  const btnModeDimension = document.getElementById('btnModeDimension');
+  const btnModeRelief = document.getElementById('btnModeRelief');
+  function updateModeButtons(){
+    btnModeDimension.classList.toggle('active', annotationMode === 'dimension');
+    btnModeRelief.classList.toggle('active', annotationMode === 'relief');
+  }
+  btnModeDimension.addEventListener('click', () => { annotationMode = 'dimension'; pendingPoint = null; updateModeButtons(); render(); });
+  btnModeRelief.addEventListener('click', () => { annotationMode = 'relief'; pendingPoint = null; updateModeButtons(); render(); });
 
   renderVectorGraphicList();
 
