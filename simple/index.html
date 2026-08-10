@@ -63,6 +63,21 @@
     </section>
 
     <section class="group">
+      <h2>גרפיקה וקטורית (SVG בלבד)</h2>
+      <p class="hint">מעלים קובץ SVG (מיוצא מאילוסטרייטור) - הוא יוצג באזור נפרד "FRONT ללא טקסט" בPDF, וניתן למקם אותו בגרירה, להגדיל/להקטין ולסובב. נשאר וקטור אמיתי בPDF, בדיוק כמו הטקסט.</p>
+      <input type="file" id="f_vectorGraphicUpload" accept=".svg,image/svg+xml">
+      <div id="vectorGraphicList" class="chip-list"></div>
+      <div id="vectorGraphicControls" style="display:none">
+        <div class="row3">
+          <label>רוחב (% מהאזור) <input type="number" id="g_width" min="2" max="100" value="20"></label>
+          <label>סיבוב (מעלות) <input type="number" id="g_rotation" min="-180" max="180" value="0"></label>
+        </div>
+        <button type="button" id="btnRemoveGraphic" class="secondary-btn">🗑 הסר גרפיקה נבחרת</button>
+      </div>
+      <div id="vectorGraphicStatus" class="hint" style="margin-top:6px"></div>
+    </section>
+
+    <section class="group">
       <h2>תמונות רפרנס + יצירת AI</h2>
       <p class="hint">אפשר להעלות כמה תמונות (עד 8) - למשל תמונת הדמייה קדמית + תמונה נוספת מזווית צד. כל התמונות נשלחות יחד גם לניתוח החומר וגם ליצירת 6 התצוגות.</p>
       <input type="file" id="f_refImage" accept="image/*" multiple>

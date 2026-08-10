@@ -8,6 +8,8 @@ let dimAnnotations = { top:[], bottom:[], front:[], back:[], side:[] }; // {x1,y
 let pendingPoint = null; // {view, x, y} - first click of a dimension-line pair
 let engravedPos = { xPct: 50, yPct: 78 }; // Front-view text overlay position, in % of the box
 let detectedText = null; // text Claude Vision read directly off the product photo - reference only
+let vectorGraphics = []; // [{id, name, svgMarkup, xPct, yPct, widthPct, rotationDeg}] - uploaded SVG logos/graphics, placed on a dedicated "Front without text" box
+let activeGraphicId = null;
 
 /* ===================== font library (shared, /api/fonts) ===================== */
 /* Font ids are Vercel Blob pathnames (e.g. "fonts/171..._MyFont.ttf") - not safe to use
@@ -50,6 +52,59 @@ function renderFontLibrarySelect(){
   ).join('');
 }
 
+/* ===================== vector graphics (SVG logos on the "Front without text" box) ===================== */
+/* Per-project only (not a shared library like fonts) - uploaded SVG markup is kept inline
+   in vectorGraphics/svgMarkup so it stays real vector content straight through to print. */
+
+function renderVectorGraphicList(){
+  const box = document.getElementById('vectorGraphicList');
+  const controls = document.getElementById('vectorGraphicControls');
+  if(vectorGraphics.length === 0){
+    box.innerHTML = '<span class="hint">אין גרפיקות שהועלו למוצר הזה</span>';
+    controls.style.display = 'none';
+    return;
+  }
+  box.innerHTML = vectorGraphics.map(g => `
+    <span class="chip ${g.id===activeGraphicId?'active':''}" data-graphic-id="${g.id}">
+      ${g.name}<button type="button" data-remove-graphic="${g.id}">✕</button>
+    </span>
+  `).join('');
+  box.querySelectorAll('.chip').forEach(chip => {
+    chip.addEventListener('click', (e) => {
+      if(e.target.matches('[data-remove-graphic]')) return;
+      selectGraphic(chip.getAttribute('data-graphic-id'));
+    });
+  });
+  box.querySelectorAll('[data-remove-graphic]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      removeGraphic(btn.getAttribute('data-remove-graphic'));
+    });
+  });
+
+  const active = vectorGraphics.find(g => g.id === activeGraphicId);
+  if(active){
+    controls.style.display = 'block';
+    document.getElementById('g_width').value = active.widthPct;
+    document.getElementById('g_rotation').value = active.rotationDeg;
+  } else {
+    controls.style.display = 'none';
+  }
+}
+
+function selectGraphic(id){
+  activeGraphicId = id;
+  renderVectorGraphicList();
+  render();
+}
+
+function removeGraphic(id){
+  vectorGraphics = vectorGraphics.filter(g => g.id !== id);
+  if(activeGraphicId === id) activeGraphicId = null;
+  renderVectorGraphicList();
+  render();
+}
+
 /* ===================== helpers ===================== */
 
 function num(id){
@@ -63,6 +118,14 @@ function fileToDataUrl(file){
     reader.onload = () => resolve(reader.result);
     reader.onerror = reject;
     reader.readAsDataURL(file);
+  });
+}
+function fileToText(file){
+  return new Promise((resolve,reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsText(file);
   });
 }
 
@@ -264,7 +327,8 @@ function collectProjectState(){
   projectFieldIds.forEach(id => { fields[id] = document.getElementById(id).value; });
   return {
     fields, activeFontId, refImages, viewImages, dimAnnotations,
-    engravedPos, detectedText, viewNotes, viewRefImages
+    engravedPos, detectedText, viewNotes, viewRefImages,
+    vectorGraphics, activeGraphicId
   };
 }
 
@@ -283,9 +347,12 @@ function applyProjectState(state){
   detectedText = state.detectedText || null;
   viewNotes = state.viewNotes || { top:'', bottom:'', front:'', back:'', side:'' };
   viewRefImages = state.viewRefImages || { top:null, bottom:null, front:null, back:null, side:null };
+  vectorGraphics = state.vectorGraphics || [];
+  activeGraphicId = state.activeGraphicId || null;
 
   document.getElementById('refImgPreview').innerHTML = refImages.map(src => `<img src="${src}">`).join('');
   renderFontLibrarySelect();
+  renderVectorGraphicList();
   render();
 }
 
@@ -444,6 +511,10 @@ function buildSkeleton(){
           <div class="label">ENGRAVED TEXT (EXACT FONT)</div>
           <div id="engravedBoxText" class="engraved-box-text"></div>
         </div>
+        <div class="graphic-box" id="graphicBox" style="display:none">
+          <div class="label">FRONT - VECTOR GRAPHIC PLACEMENT</div>
+          <div class="graphic-canvas" id="graphicCanvas"></div>
+        </div>
         <div class="notes-box"><div class="label">MANUFACTURING NOTES</div><ol id="notesList"></ol></div>
       </div>
     </div>
@@ -484,6 +555,46 @@ function render(){
       `<span style="font-family:'custom-${cssSafeId(activeFontId)}'; color:${textcolor}">${text}</span>`;
   } else {
     engravedBox.style.display = 'none';
+  }
+
+  const graphicBox = document.getElementById('graphicBox');
+  const frontImgSrc = viewImages.front;
+  if(frontImgSrc){
+    graphicBox.style.display = 'block';
+    const graphicCanvas = document.getElementById('graphicCanvas');
+    graphicCanvas.innerHTML = `
+      <img src="${frontImgSrc}">
+      ${vectorGraphics.length === 0 ? '<div class="placeholder">העלי קובץ SVG בפאנל כדי למקם אותו כאן</div>' : ''}
+      ${vectorGraphics.map(g => `
+        <div class="vector-graphic-overlay ${g.id===activeGraphicId?'active':''}" data-graphic-id="${g.id}"
+             style="left:${g.xPct}%; top:${g.yPct}%; width:${g.widthPct}%; transform:translate(-50%,-50%) rotate(${g.rotationDeg}deg)">
+          ${g.svgMarkup}
+        </div>
+      `).join('')}
+    `;
+    graphicCanvas.querySelectorAll('.vector-graphic-overlay').forEach(overlayEl => {
+      const gId = overlayEl.getAttribute('data-graphic-id');
+      overlayEl.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        selectGraphic(gId);
+        const g = vectorGraphics.find(gr => gr.id === gId);
+        const onMove = (ev) => {
+          const rect = graphicCanvas.getBoundingClientRect();
+          g.xPct = Math.max(0, Math.min(100, ((ev.clientX-rect.left)/rect.width)*100));
+          g.yPct = Math.max(0, Math.min(100, ((ev.clientY-rect.top)/rect.height)*100));
+          overlayEl.style.left = g.xPct + '%';
+          overlayEl.style.top = g.yPct + '%';
+        };
+        const onUp = () => {
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup', onUp);
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+      });
+    });
+  } else {
+    graphicBox.style.display = 'none';
   }
 
   const views = document.getElementById('viewsGrid');
@@ -601,6 +712,46 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('btnLoadProject').addEventListener('click', loadSelectedProject);
+
+  renderVectorGraphicList();
+
+  document.getElementById('f_vectorGraphicUpload').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const status = document.getElementById('vectorGraphicStatus');
+    const text = await fileToText(file);
+    if(!/<svg[\s>]/i.test(text)){
+      status.textContent = 'הקובץ שנבחר לא נראה כמו SVG תקין.';
+      e.target.value = '';
+      return;
+    }
+    const id = 'g' + Date.now();
+    vectorGraphics.push({
+      id, name: file.name.replace(/\.[^.]+$/, ''), svgMarkup: text,
+      xPct: 50, yPct: 50, widthPct: 20, rotationDeg: 0
+    });
+    activeGraphicId = id;
+    status.textContent = `✅ "${file.name}" נוסף - אפשר לגרור אותו על התמונה כדי למקם אותו.`;
+    renderVectorGraphicList();
+    render();
+    e.target.value = '';
+  });
+
+  document.getElementById('g_width').addEventListener('input', (e) => {
+    const g = vectorGraphics.find(gr => gr.id === activeGraphicId);
+    if(!g) return;
+    g.widthPct = parseFloat(e.target.value) || g.widthPct;
+    render();
+  });
+  document.getElementById('g_rotation').addEventListener('input', (e) => {
+    const g = vectorGraphics.find(gr => gr.id === activeGraphicId);
+    if(!g) return;
+    g.rotationDeg = parseFloat(e.target.value) || 0;
+    render();
+  });
+  document.getElementById('btnRemoveGraphic').addEventListener('click', () => {
+    if(activeGraphicId) removeGraphic(activeGraphicId);
+  });
 
   document.getElementById('f_refImage').addEventListener('change', async (e) => {
     const files = Array.from(e.target.files).slice(0,8);
