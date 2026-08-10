@@ -94,6 +94,8 @@
       <label>הערות ל-AI לפני יצירה (אופציונלי)
         <textarea id="f_aiNotes" rows="3" placeholder="* לא חובה, אבל יכול לעזור - למשל: &quot;אין ידיות&quot;, &quot;יש חריץ מטבע במרכז המכסה&quot;, &quot;הבסיס שטוח לגמרי, לא עגול&quot;"></textarea>
       </label>
+      <label class="checkline"><input type="checkbox" id="f_aiRecreateText"> נסה לשחזר את הכיתוב/הגרפיקה מהתמונה על ה-FRONT</label>
+      <p class="hint">כבוי כברירת מחדל (וכך ה-FRONT נשאר נקי כרגיל, לשכבת הטקסט המדויקת בפונט). אם מסמנים - ה-AI ינסה לצייר בעצמו את הכיתוב שנראה בתמונת המקור ישירות בתוך תמונת ה-FRONT, לצורך מראה כללי בלבד - הוא לא מדויק (בטח לא בעברית) ולא וקטור, ולא קשור לשכבת הטקסט המדויקת שממשיכה לעבוד בנפרד.</p>
       <button type="button" id="btnGenerateViews" class="secondary-btn">🎨 צור 6 תצוגות עם AI (GPT)</button>
       <div id="genStatus" class="hint" style="margin-top:6px"></div>
       <button type="button" id="btnShowPrompt" class="secondary-btn">👁 הצג את הפרומפט המדויק שיישלח</button>

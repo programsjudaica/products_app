@@ -165,6 +165,10 @@ function buildGenerationPrompt(){
   const notesBlock = designerNotes
     ? `\n\nDESIGNER'S NOTES ABOUT THIS SPECIFIC PRODUCT (these are ground truth from the person who actually knows the product - they override any general assumption below if they conflict):\n${designerNotes}\n`
     : '';
+  const recreateText = document.getElementById('f_aiRecreateText').checked;
+  const textRule = recreateText
+    ? `- On the FRONT cell ONLY: reproduce any text/lettering/logo visible on the product's surface in the reference photo, matching its real position, size and style on the product as closely as possible.${detectedText ? ` The text reads: "${detectedText}".` : ''} This is for overall visual reference only, not a precise vector - a separate exact overlay is added later. On every OTHER cell (Top, Bottom, Back, Left/Right Side) do NOT render any text/lettering/engraving at all - leave that area completely plain and blank, even if the same text would logically appear there too.`
+    : `- On the product itself: do NOT render any text/lettering/engraving on the product's surface either - leave any text/engraving area on the product completely plain and blank (real text will be added separately as a precise overlay). To be clear: no text anywhere at all, neither on the product nor around it.`;
   return `Using the attached photo(s) as reference, generate ONE image containing 6 separate sub-images of this exact same physical product, arranged in a clean 2x3 grid with thin dividing lines between cells. Do NOT add any text labels, captions or titles for the cells - the grid position alone identifies each view.
 ${notesBlock}
 
@@ -174,11 +178,11 @@ Row 2: Bottom, Back, Left Side
 
 Requirements for all 6 sub-images:
 - Flat, clean technical/catalog illustration style - no dramatic lighting, no shadows, no reflections, no isometric/3D angle under any circumstances - strictly straight-on orthographic views only
-- Plain solid white background for every cell, completely empty - ABSOLUTELY NO text, letters, numbers, watermarks, labels, captions, logos or any marking of any kind anywhere in the white background or empty space around the product. This is a hard rule with zero exceptions.
+- Plain solid white background for every cell, completely empty - ABSOLUTELY NO text, letters, numbers, watermarks, labels, captions, logos or any marking of any kind anywhere in the white background or empty space around the product (this white-background rule applies even on the FRONT cell). This is a hard rule with zero exceptions.
 - Same exact scale, framing and margins across all 6 cells
 - Preserve the actual materials, colors and textures visible in the reference photo
 - Do NOT add any decorative element, icon, symbol, handle, protrusion or other structural detail that is not visible in the reference photo - even if that kind of object commonly has one (e.g. many cups have handles - do not add one unless you can actually see it in the reference photo). If unsure, leave that area plain rather than inventing something.
-- On the product itself: do NOT render any text/lettering/engraving on the product's surface either - leave any text/engraving area on the product completely plain and blank (real text will be added separately as a precise overlay). To be clear: no text anywhere at all, neither on the product nor around it.
+${textRule}
 - If the reference photo shows more than one physical unit (e.g. a matching pair or set), depict only ONE single unit, not both together
 - Back: not visible in the reference photo - do not invent any decorative detail for it. Render only the correct overall silhouette/proportions matching the other views, with the same material/texture, but no engraving.
 - Top, Bottom, Left Side, Right Side: infer the correct silhouette and proportions from the reference photo, consistent with the front view.
@@ -198,13 +202,17 @@ function buildSingleViewPrompt(viewLabel, viewNote, hasSpecificImage){
   if(globalNotes) notesBlock += `\n\nGeneral designer notes about this product (ground truth, overrides assumptions if they conflict): ${globalNotes}`;
   if(viewNote) notesBlock += `\n\nSpecific instructions for THIS view (${viewLabel}) - follow these precisely, they are the most important guidance for this image: ${viewNote}`;
   if(hasSpecificImage) notesBlock += `\n\nIMPORTANT: the LAST photo attached shows this exact "${viewLabel}" angle directly, photographed specifically for this purpose. Prioritize it as the primary geometric reference for this view over the other photos - match its actual proportions and structure precisely, not just a generic guess.`;
+  const recreateText = viewLabel === 'Front' && document.getElementById('f_aiRecreateText').checked;
+  const textRule = recreateText
+    ? `- Reproduce any text/lettering/logo visible on the product's surface in the reference photo, matching its real position, size and style on the product as closely as possible.${detectedText ? ` The text reads: "${detectedText}".` : ''} This is for overall visual reference only, not a precise vector - a separate exact overlay is added later.`
+    : `- ABSOLUTELY NO text, letters, numbers, watermarks, labels, captions, logos or any marking anywhere - not around the product and not on the product's own surface either. This is a hard rule with zero exceptions (real text will be added separately as a precise overlay).`;
   return `Using the attached photo(s) as reference, generate ONE single image showing ONLY the "${viewLabel}" straight-on orthographic view (no angle, no perspective, no isometric/3D under any circumstances) of this exact physical product.
 ${notesBlock}
 
 Requirements:
 - Flat, clean technical/catalog illustration style - no dramatic lighting, no shadows, no reflections
 - Plain solid white background, filling the frame with just this one view, no grid, no labels, no other angles, completely empty otherwise
-- ABSOLUTELY NO text, letters, numbers, watermarks, labels, captions, logos or any marking anywhere - not around the product and not on the product's own surface either. This is a hard rule with zero exceptions (real text will be added separately as a precise overlay).
+${textRule}
 - Preserve the actual materials, colors and textures visible in the reference photo
 - Do NOT add any decorative element, icon, symbol, handle, protrusion or other structural detail that is not visible in the reference photo - even if that kind of object commonly has one. If unsure, leave that area plain rather than inventing something.
 - If the reference photo shows more than one physical unit (e.g. a matching pair or set), depict only ONE single unit`;
@@ -330,7 +338,8 @@ function collectProjectState(){
   return {
     fields, activeFontId, refImages, viewImages, dimAnnotations,
     engravedPos, detectedText, viewNotes, viewRefImages,
-    vectorGraphics, activeGraphicId, reliefAnnotations
+    vectorGraphics, activeGraphicId, reliefAnnotations,
+    aiRecreateText: document.getElementById('f_aiRecreateText').checked
   };
 }
 
@@ -352,6 +361,7 @@ function applyProjectState(state){
   vectorGraphics = state.vectorGraphics || [];
   activeGraphicId = state.activeGraphicId || null;
   reliefAnnotations = state.reliefAnnotations || { top:[], bottom:[], front:[], back:[], side:[] };
+  document.getElementById('f_aiRecreateText').checked = !!state.aiRecreateText;
 
   document.getElementById('refImgPreview').innerHTML = refImages.map(src => `<img src="${src}">`).join('');
   renderFontLibrarySelect();
