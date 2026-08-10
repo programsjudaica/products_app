@@ -439,7 +439,7 @@ function reliefMarkerSvg(ann, index, viewKey){
   const {xPct, yPct, label} = ann;
   const boxW = Math.max(20, label.length * 2.3);
   const labelY = Math.max(4, yPct - 9);
-  return `<g>
+  return `<g class="dim-draggable" data-relief-view="${viewKey}" data-relief-index="${index}">
     <line class="dim-line-overlay" x1="${xPct}%" y1="${yPct}%" x2="${xPct}%" y2="${labelY+2}%"/>
     <circle class="relief-point" cx="${xPct}%" cy="${yPct}%" r="1.6%"/>
     <g class="dim-removable" data-relief-remove-view="${viewKey}" data-relief-remove-index="${index}">
@@ -483,7 +483,7 @@ function handleReliefClick(viewKey, canvasEl, e){
 function dimLineSvg(ann, index, viewKey){
   const {x1,y1,x2,y2,label} = ann;
   const mx = (x1+x2)/2, my=(y1+y2)/2;
-  return `<g>
+  return `<g class="dim-draggable" data-dim-view="${viewKey}" data-dim-index="${index}">
     <line class="dim-line-overlay" x1="${x1}%" y1="${y1}%" x2="${x2}%" y2="${y2}%"/>
     <g class="dim-removable" data-remove-view="${viewKey}" data-remove-index="${index}">
       <rect class="dim-text-bg" x="${mx-9}%" y="${my-2.6}%" width="18%" height="5.2%"/>
@@ -571,6 +571,69 @@ function handleViewCanvasClick(viewKey, canvasEl, e){
 }
 
 /* ===================== render ===================== */
+
+/* builds just the <svg> inner content for one view-canvas - factored out so a drag in
+   progress can cheaply refresh only this SVG instead of re-rendering the whole sheet */
+function buildViewSvgContent(viewKey, H, W, D){
+  const annotations = (dimAnnotations[viewKey]||[]).map((ann,i) => dimLineSvg(ann, i, viewKey)).join('');
+  const reliefMarkers = (reliefAnnotations[viewKey]||[]).map((ann,i) => reliefMarkerSvg(ann, i, viewKey)).join('');
+  const autoDims = viewKey==='section' ? '' : autoDimLines(viewKey, H, W, D);
+  const pendingDot = (pendingPoint && pendingPoint.view===viewKey)
+    ? `<circle class="dim-point" cx="${pendingPoint.x}%" cy="${pendingPoint.y}%" r="2.5"/>` : '';
+  return `${autoDims}${annotations}${reliefMarkers}${pendingDot}`;
+}
+
+/* lets a designer drag an already-placed dimension line or relief marker to reposition it,
+   instead of only being able to delete and recreate it. Uses a cheap SVG-only refresh during
+   the drag (buildViewSvgContent) and a full render() on mouseup to re-attach listeners. */
+function wireAnnotationDragging(canvasEl, viewKey){
+  canvasEl.querySelectorAll('.dim-draggable').forEach(dragEl => {
+    dragEl.addEventListener('mousedown', (e) => {
+      if(e.target.closest('.dim-remove-x')) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      const rect = canvasEl.getBoundingClientRect();
+      let lastXPct = ((e.clientX - rect.left) / rect.width) * 100;
+      let lastYPct = ((e.clientY - rect.top) / rect.height) * 100;
+      const dimView = dragEl.getAttribute('data-dim-view');
+      const dimIndex = dragEl.hasAttribute('data-dim-index') ? parseInt(dragEl.getAttribute('data-dim-index'), 10) : null;
+      const reliefView = dragEl.getAttribute('data-relief-view');
+      const reliefIndex = dragEl.hasAttribute('data-relief-index') ? parseInt(dragEl.getAttribute('data-relief-index'), 10) : null;
+      let moved = false;
+
+      const onMove = (ev) => {
+        const curXPct = ((ev.clientX - rect.left) / rect.width) * 100;
+        const curYPct = ((ev.clientY - rect.top) / rect.height) * 100;
+        const dx = curXPct - lastXPct, dy = curYPct - lastYPct;
+        lastXPct = curXPct; lastYPct = curYPct;
+        if(Math.abs(dx) > 0.05 || Math.abs(dy) > 0.05) moved = true;
+
+        if(dimView){
+          const ann = dimAnnotations[dimView] && dimAnnotations[dimView][dimIndex];
+          if(!ann) return;
+          ann.x1 += dx; ann.y1 += dy; ann.x2 += dx; ann.y2 += dy;
+        } else if(reliefView){
+          const ann = reliefAnnotations[reliefView] && reliefAnnotations[reliefView][reliefIndex];
+          if(!ann) return;
+          ann.xPct += dx; ann.yPct += dy;
+        }
+        const svgEl = canvasEl.querySelector('svg');
+        if(svgEl) svgEl.innerHTML = buildViewSvgContent(viewKey, num('d_H'), num('d_W'), num('d_D'));
+      };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        if(moved){
+          document.addEventListener('click', (ce) => { ce.stopPropagation(); ce.preventDefault(); }, { capture:true, once:true });
+        }
+        render();
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  });
+}
 
 function buildSkeleton(){
   document.getElementById('specSheet').innerHTML = `
@@ -687,11 +750,6 @@ function render(){
     box.className = 'view-box';
     const imgSrc = viewImages[v.key];
     const fitMode = 'contain'; // never distort the AI image - real measurements come from the dimension lines, not from stretching pixels
-    const annotations = (dimAnnotations[v.key]||[]).map((ann,i) => dimLineSvg(ann, i, v.key)).join('');
-    const reliefMarkers = (reliefAnnotations[v.key]||[]).map((ann,i) => reliefMarkerSvg(ann, i, v.key)).join('');
-    const autoDims = v.key==='section' ? '' : autoDimLines(v.key, H, W, D);
-    const pendingDot = (pendingPoint && pendingPoint.view===v.key)
-      ? `<circle class="dim-point" cx="${pendingPoint.x}%" cy="${pendingPoint.y}%" r="2.5"/>` : '';
     const engravedOverlay = (v.key==='front' && text) ? `<div class="engraved-text-overlay" id="engravedOverlay" style="left:${engravedPos.xPct}%; top:${engravedPos.yPct}%; font-size:${fontsize}px; color:${textcolor}; font-family:${activeFontId?`'custom-${cssSafeId(activeFontId)}'`:'inherit'}">${text}</div>` : '';
 
     box.innerHTML = `
@@ -699,7 +757,7 @@ function render(){
       <div class="view-canvas" id="canvas-${v.key}">
         ${imgSrc ? `<img src="${imgSrc}" style="object-fit:${fitMode}">` : (v.key==='section' ? '<div class="placeholder">Schematic drawing - add manually</div>' : '<div class="placeholder">Image not generated yet</div>')}
         ${engravedOverlay}
-        <svg>${autoDims}${annotations}${reliefMarkers}${pendingDot}</svg>
+        <svg>${buildViewSvgContent(v.key, H, W, D)}</svg>
       </div>
     `;
     views.appendChild(box);
@@ -708,8 +766,10 @@ function render(){
       const canvasEl = box.querySelector('.view-canvas');
       canvasEl.addEventListener('click', (e) => {
         if(e.target.closest('.engraved-text-overlay')) return;
+        if(e.target.closest('.dim-draggable') && !e.target.closest('[data-remove-view]') && !e.target.closest('[data-relief-remove-view]')) return;
         handleViewCanvasClick(v.key, canvasEl, e);
       });
+      wireAnnotationDragging(canvasEl, v.key);
     }
   });
 
