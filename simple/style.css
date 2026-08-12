@@ -73,25 +73,38 @@ textarea{resize:vertical}
   width:297mm; min-height:210mm; background:#fff;
   box-shadow:0 4px 20px rgba(0,0,0,.15); padding:12mm 14mm;
   font-family:'Assistant', sans-serif;
+  position:relative;
 }
+
+/* ---------- free-form worksheet layout ---------- */
+/* every box on the sheet is absolutely positioned per its saved layout%, draggable by its
+   label/header (.box-handle) and resizable via a corner handle - a real work surface */
+.free-box{ position:absolute; box-sizing:border-box; overflow:auto }
+.box-handle{ cursor:move; user-select:none }
+.box-resize-handle{
+  position:absolute; right:0; bottom:0; width:10px; height:10px;
+  cursor:nwse-resize; background:var(--accent); opacity:.45; border-radius:3px 0 4px 0;
+  z-index:2;
+}
+.header-box, .footer-box{ overflow:visible }
+.header-box .sheet-header, .footer-box .sheet-footer{ height:100% }
+
 .sheet-header{
   display:flex; justify-content:space-between; align-items:baseline;
-  border-bottom:1px solid #ddd; padding-bottom:6mm; margin-bottom:6mm;
+  border-bottom:1px solid #ddd; padding-bottom:6mm;
   direction:ltr; text-align:left;
 }
 .sheet-header .code{font-size:22pt; font-weight:700; letter-spacing:.02em}
 .sheet-header .title{font-size:9pt; letter-spacing:.08em; color:#666; text-transform:uppercase; margin-top:2px}
 .sheet-header .meta{font-size:8pt; color:#888; text-align:right}
 
-.sheet-body{display:grid; grid-template-columns:1.6fr 1fr; gap:10mm; direction:ltr}
-.views-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:6mm}
 .view-box{
   border:1px solid #e2ddd2; border-radius:4px; padding:4mm; text-align:center;
-  position:relative;
+  display:flex; flex-direction:column;
 }
-.view-box .label{font-size:7.5pt; color:#8a8478; text-transform:uppercase; letter-spacing:.06em; margin-bottom:2mm}
+.view-box .label{font-size:7.5pt; color:#8a8478; text-transform:uppercase; letter-spacing:.06em; margin-bottom:2mm; flex:0 0 auto}
 .view-canvas{
-  position:relative; width:100%; aspect-ratio:4/3; background:#f7f5f0;
+  position:relative; width:100%; flex:1 1 auto; min-height:0; background:#f7f5f0;
   border-radius:2px; overflow:hidden; cursor:crosshair;
 }
 .view-canvas img{width:100%; height:100%; object-fit:contain}
@@ -120,7 +133,6 @@ textarea{resize:vertical}
   transform:translate(-50%,-50%);
 }
 
-.side-col{display:flex; flex-direction:column; gap:6mm}
 .ref-box{border:1px solid #e2ddd2; border-radius:4px; padding:3mm}
 .ref-box .label{font-size:7.5pt; color:#8a8478; text-transform:uppercase; letter-spacing:.06em; margin-bottom:2mm; text-align:center}
 .ref-img-gallery{display:grid; grid-template-columns:1fr 1fr; gap:2mm}
@@ -133,9 +145,9 @@ textarea{resize:vertical}
 .engraved-box .label{font-size:7.5pt; color:#8a8478; text-transform:uppercase; letter-spacing:.06em; margin-bottom:2mm}
 .engraved-box-text{font-size:20pt; padding:2mm; direction:rtl}
 
-.graphic-box{border:1px solid #e2ddd2; border-radius:4px; padding:3mm}
-.graphic-box .label{font-size:7.5pt; color:#8a8478; text-transform:uppercase; letter-spacing:.06em; margin-bottom:2mm; text-align:center}
-.graphic-canvas{position:relative; width:100%; aspect-ratio:4/3; background:#f7f5f0; border-radius:2px; overflow:hidden; cursor:default}
+.graphic-box{border:1px solid #e2ddd2; border-radius:4px; padding:3mm; display:flex; flex-direction:column}
+.graphic-box .label{font-size:7.5pt; color:#8a8478; text-transform:uppercase; letter-spacing:.06em; margin-bottom:2mm; text-align:center; flex:0 0 auto}
+.graphic-canvas{position:relative; width:100%; flex:1 1 auto; min-height:0; background:#f7f5f0; border-radius:2px; overflow:hidden; cursor:default}
 .graphic-canvas img{width:100%; height:100%; object-fit:contain}
 .graphic-canvas .placeholder{
   position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
@@ -145,13 +157,13 @@ textarea{resize:vertical}
 .vector-graphic-overlay svg{width:100%; height:auto; display:block; pointer-events:none}
 .vector-graphic-overlay.active{outline:1px dashed var(--accent)}
 
-.notes-box{border:1px solid #e2ddd2; border-radius:4px; padding:4mm; flex:1}
-.notes-box .label{font-size:8pt; font-weight:700; letter-spacing:.05em; margin-bottom:2mm}
-.notes-box ol{margin:0; padding-inline-start:4mm; font-size:7.3pt; line-height:1.55; color:#333}
+.notes-box{border:1px solid #e2ddd2; border-radius:4px; padding:4mm; display:flex; flex-direction:column}
+.notes-box .label{font-size:8pt; font-weight:700; letter-spacing:.05em; margin-bottom:2mm; flex:0 0 auto}
+.notes-box ol{margin:0; padding-inline-start:4mm; font-size:7.3pt; line-height:1.55; color:#333; flex:1 1 auto; min-height:0}
 
 .sheet-footer{
-  margin-top:6mm; padding-top:3mm; border-top:1px solid #ddd;
-  display:flex; justify-content:space-between; font-size:7pt; color:#999; direction:ltr;
+  padding-top:3mm; border-top:1px solid #ddd;
+  display:flex; justify-content:space-between; align-items:center; font-size:7pt; color:#999; direction:ltr;
 }
 
 @media print{
@@ -162,5 +174,7 @@ textarea{resize:vertical}
   .view-canvas{cursor:default}
   .dim-remove-x{display:none}
   .vector-graphic-overlay.active{outline:none}
+  .box-resize-handle{display:none}
+  .box-handle{cursor:default}
   @page{size:A4 landscape; margin:8mm}
 }

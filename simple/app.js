@@ -338,7 +338,7 @@ function collectProjectState(){
   return {
     fields, activeFontId, refImages, viewImages, dimAnnotations,
     engravedPos, detectedText, viewNotes, viewRefImages,
-    vectorGraphics, activeGraphicId, reliefAnnotations,
+    vectorGraphics, activeGraphicId, reliefAnnotations, layout,
     aiRecreateText: document.getElementById('f_aiRecreateText').checked
   };
 }
@@ -362,10 +362,12 @@ function applyProjectState(state){
   activeGraphicId = state.activeGraphicId || null;
   reliefAnnotations = state.reliefAnnotations || { top:[], bottom:[], front:[], back:[], side:[] };
   document.getElementById('f_aiRecreateText').checked = !!state.aiRecreateText;
+  layout = state.layout || cloneDefaultLayout();
 
   document.getElementById('refImgPreview').innerHTML = refImages.map(src => `<img src="${src}">`).join('');
   renderFontLibrarySelect();
   renderVectorGraphicList();
+  buildSkeleton();
   render();
 }
 
@@ -635,36 +637,161 @@ function wireAnnotationDragging(canvasEl, viewKey){
   });
 }
 
+/* ===================== free-form worksheet layout ===================== */
+/* Every box on the sheet (header, the 6 views, ref/engraved/graphic/notes, footer) has an
+   explicit x/y/w/h in % of the sheet, and can be dragged (by its label) and resized (corner
+   handle) independently - a designer can rearrange the whole page like a work surface. */
+
+const boxDefs = [
+  { id:'header' },
+  { id:'view_top', viewKey:'top', label:'TOP' },
+  { id:'view_bottom', viewKey:'bottom', label:'BOTTOM' },
+  { id:'view_front', viewKey:'front', label:'FRONT' },
+  { id:'view_back', viewKey:'back', label:'BACK' },
+  { id:'view_side', viewKey:'side', label:'SIDE' },
+  { id:'view_section', viewKey:'section', label:'SECTION' },
+  { id:'ref_box' },
+  { id:'engraved_box' },
+  { id:'graphic_box' },
+  { id:'notes_box' },
+  { id:'footer' }
+];
+
+const defaultLayout = {
+  header:       { xPct:0,    yPct:0,    wPct:100, hPct:10 },
+  view_top:     { xPct:0,    yPct:12,   wPct:19,  hPct:40 },
+  view_front:   { xPct:20.5, yPct:12,   wPct:19,  hPct:40 },
+  view_side:    { xPct:41,   yPct:12,   wPct:19,  hPct:40 },
+  view_bottom:  { xPct:0,    yPct:53,   wPct:19,  hPct:40 },
+  view_back:    { xPct:20.5, yPct:53,   wPct:19,  hPct:40 },
+  view_section: { xPct:41,   yPct:53,   wPct:19,  hPct:40 },
+  ref_box:      { xPct:62,   yPct:12,   wPct:38,  hPct:24 },
+  engraved_box: { xPct:62,   yPct:37,   wPct:38,  hPct:12 },
+  graphic_box:  { xPct:62,   yPct:50,   wPct:38,  hPct:24 },
+  notes_box:    { xPct:62,   yPct:75,   wPct:38,  hPct:19 },
+  footer:       { xPct:0,    yPct:95.5, wPct:100, hPct:4 }
+};
+
+let layout = null;
+
+function cloneDefaultLayout(){
+  return JSON.parse(JSON.stringify(defaultLayout));
+}
+
+function resetLayout(){
+  if(!confirm('לאפס את הפריסה למיקום/גודל ברירת המחדל? כל השינויים הידניים במיקום התיבות יאבדו (התוכן עצמו - תמונות, מידות, טקסט - לא נפגע).')) return;
+  layout = cloneDefaultLayout();
+  buildSkeleton();
+  render();
+}
+
+/* drag-by-handle + resize-by-corner for one free-box wrapper. Called once per box in
+   buildSkeleton() - the wrapper element itself persists across render() calls (only its
+   inner content gets rebuilt), so these listeners never need re-attaching. */
+function wireFreeBox(boxEl, boxId){
+  const sheet = document.getElementById('specSheet');
+  const handle = boxEl.querySelector('.box-handle') || boxEl;
+
+  handle.addEventListener('mousedown', (e) => {
+    if(e.target.closest('.view-canvas') || e.target.closest('.graphic-canvas') || e.target.closest('.box-resize-handle')) return;
+    e.preventDefault();
+    const rect = sheet.getBoundingClientRect();
+    let lastXPct = ((e.clientX-rect.left)/rect.width)*100;
+    let lastYPct = ((e.clientY-rect.top)/rect.height)*100;
+    const onMove = (ev) => {
+      const curXPct = ((ev.clientX-rect.left)/rect.width)*100;
+      const curYPct = ((ev.clientY-rect.top)/rect.height)*100;
+      const dx = curXPct-lastXPct, dy = curYPct-lastYPct;
+      lastXPct = curXPct; lastYPct = curYPct;
+      const box = layout[boxId];
+      box.xPct = Math.max(0, Math.min(100 - box.wPct, box.xPct + dx));
+      box.yPct = Math.max(0, Math.min(100 - box.hPct, box.yPct + dy));
+      boxEl.style.left = box.xPct + '%';
+      boxEl.style.top = box.yPct + '%';
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+
+  const resizeHandle = boxEl.querySelector('.box-resize-handle');
+  resizeHandle.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = sheet.getBoundingClientRect();
+    let lastXPct = ((e.clientX-rect.left)/rect.width)*100;
+    let lastYPct = ((e.clientY-rect.top)/rect.height)*100;
+    const onMove = (ev) => {
+      const curXPct = ((ev.clientX-rect.left)/rect.width)*100;
+      const curYPct = ((ev.clientY-rect.top)/rect.height)*100;
+      const dx = curXPct-lastXPct, dy = curYPct-lastYPct;
+      lastXPct = curXPct; lastYPct = curYPct;
+      const box = layout[boxId];
+      box.wPct = Math.max(6, box.wPct + dx);
+      box.hPct = Math.max(4, box.hPct + dy);
+      boxEl.style.width = box.wPct + '%';
+      boxEl.style.height = box.hPct + '%';
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
+function boxInnerHtml(def){
+  if(def.id === 'header'){
+    return `<div class="sheet-header box-handle"><div><div class="code"></div><div class="title"></div></div><div class="meta"></div></div>`;
+  }
+  if(def.viewKey){
+    return `<div class="label box-handle">${def.label}</div><div class="view-canvas" id="canvas-${def.viewKey}"></div>`;
+  }
+  if(def.id === 'ref_box'){
+    return `<div class="label box-handle">Reference appearance</div><div id="refImgGallery" class="ref-img-gallery"></div><div id="detectedTextCaption" class="detected-text-caption"></div>`;
+  }
+  if(def.id === 'engraved_box'){
+    return `<div class="label box-handle">ENGRAVED TEXT (EXACT FONT)</div><div id="engravedBoxText" class="engraved-box-text"></div>`;
+  }
+  if(def.id === 'graphic_box'){
+    return `<div class="label box-handle">FRONT - VECTOR GRAPHIC PLACEMENT</div><div class="graphic-canvas" id="graphicCanvas"></div>`;
+  }
+  if(def.id === 'notes_box'){
+    return `<div class="label box-handle">MANUFACTURING NOTES</div><ol id="notesList"></ol>`;
+  }
+  if(def.id === 'footer'){
+    return `<div class="sheet-footer box-handle"><span>CONCEPT TECHNICAL SPECIFICATION - supplier must confirm production engineering, tolerances and tooling feasibility before mold release.</span><span id="footerRev"></span></div>`;
+  }
+  return '';
+}
+
 function buildSkeleton(){
-  document.getElementById('specSheet').innerHTML = `
-    <div class="sheet-header">
-      <div><div class="code"></div><div class="title"></div></div>
-      <div class="meta"></div>
-    </div>
-    <div class="sheet-body">
-      <div class="views-grid" id="viewsGrid"></div>
-      <div class="side-col">
-        <div class="ref-box">
-          <div class="label">Reference appearance</div>
-          <div id="refImgGallery" class="ref-img-gallery"></div>
-          <div id="detectedTextCaption" class="detected-text-caption"></div>
-        </div>
-        <div class="engraved-box" id="engravedBox" style="display:none">
-          <div class="label">ENGRAVED TEXT (EXACT FONT)</div>
-          <div id="engravedBoxText" class="engraved-box-text"></div>
-        </div>
-        <div class="graphic-box" id="graphicBox" style="display:none">
-          <div class="label">FRONT - VECTOR GRAPHIC PLACEMENT</div>
-          <div class="graphic-canvas" id="graphicCanvas"></div>
-        </div>
-        <div class="notes-box"><div class="label">MANUFACTURING NOTES</div><ol id="notesList"></ol></div>
-      </div>
-    </div>
-    <div class="sheet-footer">
-      <span>CONCEPT TECHNICAL SPECIFICATION - supplier must confirm production engineering, tolerances and tooling feasibility before mold release.</span>
-      <span id="footerRev"></span>
-    </div>
-  `;
+  if(!layout) layout = cloneDefaultLayout();
+  const sheet = document.getElementById('specSheet');
+  sheet.innerHTML = boxDefs.map(def => {
+    const pos = layout[def.id];
+    const extraClass = def.id === 'header' ? 'header-box' : def.id === 'footer' ? 'footer-box' : def.viewKey ? 'view-box' : def.id.replace(/_/g,'-');
+    return `<div class="free-box ${extraClass}" id="box-${def.id}" style="left:${pos.xPct}%; top:${pos.yPct}%; width:${pos.wPct}%; height:${pos.hPct}%">
+      ${boxInnerHtml(def)}
+      <div class="box-resize-handle"></div>
+    </div>`;
+  }).join('');
+
+  boxDefs.forEach(def => wireFreeBox(document.getElementById('box-'+def.id), def.id));
+
+  boxDefs.forEach(def => {
+    if(!def.viewKey || def.viewKey === 'section') return;
+    const canvasEl = document.getElementById('canvas-' + def.viewKey);
+    canvasEl.addEventListener('click', (e) => {
+      if(e.target.closest('.engraved-text-overlay')) return;
+      if(e.target.closest('.dim-draggable') && !e.target.closest('[data-remove-view]') && !e.target.closest('[data-relief-remove-view]')) return;
+      handleViewCanvasClick(def.viewKey, canvasEl, e);
+    });
+  });
 }
 
 
@@ -690,19 +817,19 @@ function render(){
     ? `Text detected automatically by AI: <strong>${detectedText}</strong> (for verification - not exact vector)`
     : '';
 
-  const engravedBox = document.getElementById('engravedBox');
+  const engravedBox = document.getElementById('box-engraved_box');
   if(text && activeFontId){
-    engravedBox.style.display = 'block';
+    engravedBox.style.display = 'flex';
     document.getElementById('engravedBoxText').innerHTML =
       `<span style="font-family:'custom-${cssSafeId(activeFontId)}'; color:${textcolor}">${text}</span>`;
   } else {
     engravedBox.style.display = 'none';
   }
 
-  const graphicBox = document.getElementById('graphicBox');
+  const graphicBox = document.getElementById('box-graphic_box');
   const frontImgSrc = viewImages.front;
   if(frontImgSrc){
-    graphicBox.style.display = 'block';
+    graphicBox.style.display = 'flex';
     const graphicCanvas = document.getElementById('graphicCanvas');
     graphicCanvas.innerHTML = `
       <img src="${frontImgSrc}">
@@ -739,36 +866,23 @@ function render(){
     graphicBox.style.display = 'none';
   }
 
-  const views = document.getElementById('viewsGrid');
-  views.innerHTML = '';
   const labels = [
-    {key:'top', label:'TOP'}, {key:'bottom', label:'BOTTOM'}, {key:'front', label:'FRONT'},
-    {key:'back', label:'BACK'}, {key:'side', label:'SIDE'}, {key:'section', label:'SECTION'}
+    {key:'top'}, {key:'bottom'}, {key:'front'},
+    {key:'back'}, {key:'side'}, {key:'section'}
   ];
   labels.forEach(v => {
-    const box = document.createElement('div');
-    box.className = 'view-box';
+    const canvasEl = document.getElementById('canvas-' + v.key);
     const imgSrc = viewImages[v.key];
     const fitMode = 'contain'; // never distort the AI image - real measurements come from the dimension lines, not from stretching pixels
     const engravedOverlay = (v.key==='front' && text) ? `<div class="engraved-text-overlay" id="engravedOverlay" style="left:${engravedPos.xPct}%; top:${engravedPos.yPct}%; font-size:${fontsize}px; color:${textcolor}; font-family:${activeFontId?`'custom-${cssSafeId(activeFontId)}'`:'inherit'}">${text}</div>` : '';
 
-    box.innerHTML = `
-      <div class="label">${v.label}</div>
-      <div class="view-canvas" id="canvas-${v.key}">
-        ${imgSrc ? `<img src="${imgSrc}" style="object-fit:${fitMode}">` : (v.key==='section' ? '<div class="placeholder">Schematic drawing - add manually</div>' : '<div class="placeholder">Image not generated yet</div>')}
-        ${engravedOverlay}
-        <svg>${buildViewSvgContent(v.key, H, W, D)}</svg>
-      </div>
+    canvasEl.innerHTML = `
+      ${imgSrc ? `<img src="${imgSrc}" style="object-fit:${fitMode}">` : (v.key==='section' ? '<div class="placeholder">Schematic drawing - add manually</div>' : '<div class="placeholder">Image not generated yet</div>')}
+      ${engravedOverlay}
+      <svg>${buildViewSvgContent(v.key, H, W, D)}</svg>
     `;
-    views.appendChild(box);
 
     if(v.key !== 'section'){
-      const canvasEl = box.querySelector('.view-canvas');
-      canvasEl.addEventListener('click', (e) => {
-        if(e.target.closest('.engraved-text-overlay')) return;
-        if(e.target.closest('.dim-draggable') && !e.target.closest('[data-remove-view]') && !e.target.closest('[data-relief-remove-view]')) return;
-        handleViewCanvasClick(v.key, canvasEl, e);
-      });
       wireAnnotationDragging(canvasEl, v.key);
     }
   });
@@ -858,6 +972,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('btnLoadProject').addEventListener('click', loadSelectedProject);
+  document.getElementById('btnResetLayout').addEventListener('click', resetLayout);
 
   const btnModeDimension = document.getElementById('btnModeDimension');
   const btnModeRelief = document.getElementById('btnModeRelief');
