@@ -180,6 +180,7 @@ Requirements for all 6 sub-images:
 - Flat, clean technical/catalog illustration style - no dramatic lighting, no shadows, no reflections, no isometric/3D angle under any circumstances - strictly straight-on orthographic views only
 - Plain solid white background for every cell, completely empty - ABSOLUTELY NO text, letters, numbers, watermarks, labels, captions, logos or any marking of any kind anywhere in the white background or empty space around the product (this white-background rule applies even on the FRONT cell). This is a hard rule with zero exceptions.
 - Same exact scale, framing and margins across all 6 cells
+- CRITICAL - fill the frame: the product must completely and confidently fill each cell (leaving only a small, even margin on all sides) - do not draw it small, tentative or off-center with large empty space around it. Each cell must contain EXACTLY ONE complete, fully-rendered instance of the product and nothing else - no stray fragment, partial duplicate, cropped echo, or second partial fragment of the object anywhere in the cell.
 - Preserve the actual materials, colors and textures visible in the reference photo
 - Do NOT add any decorative element, icon, symbol, handle, protrusion or other structural detail that is not visible in the reference photo - even if that kind of object commonly has one (e.g. many cups have handles - do not add one unless you can actually see it in the reference photo). If unsure, leave that area plain rather than inventing something.
 ${textRule}
@@ -212,6 +213,7 @@ ${notesBlock}
 Requirements:
 - Flat, clean technical/catalog illustration style - no dramatic lighting, no shadows, no reflections
 - Plain solid white background, filling the frame with just this one view, no grid, no labels, no other angles, completely empty otherwise
+- CRITICAL - fill the frame: the product must completely and confidently fill the frame (leaving only a small, even margin on all sides) - do not draw it small, tentative or off-center with large empty space around it. The image must contain EXACTLY ONE complete, fully-rendered instance of the product and nothing else - no stray fragment, partial duplicate, cropped echo, or second partial fragment of the object anywhere in the frame.
 ${textRule}
 - Preserve the actual materials, colors and textures visible in the reference photo
 - Do NOT add any decorative element, icon, symbol, handle, protrusion or other structural detail that is not visible in the reference photo - even if that kind of object commonly has one. If unsure, leave that area plain rather than inventing something.
