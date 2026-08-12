@@ -102,7 +102,15 @@
       </label>
       <label class="checkline"><input type="checkbox" id="f_aiRecreateText"> נסה לשחזר את הכיתוב/הגרפיקה מהתמונה על ה-FRONT</label>
       <p class="hint">כבוי כברירת מחדל (וכך ה-FRONT נשאר נקי כרגיל, לשכבת הטקסט המדויקת בפונט). אם מסמנים - ה-AI ינסה לצייר בעצמו את הכיתוב שנראה בתמונת המקור ישירות בתוך תמונת ה-FRONT, לצורך מראה כללי בלבד - הוא לא מדויק (בטח לא בעברית) ולא וקטור, ולא קשור לשכבת הטקסט המדויקת שממשיכה לעבוד בנפרד.</p>
-      <button type="button" id="btnGenerateViews" class="secondary-btn">🎨 צור 6 תצוגות עם AI (GPT)</button>
+      <p class="hint" style="margin-top:10px">אילו תצוגות ליצור (ברירת מחדל: כולן):</p>
+      <div class="row3" style="flex-wrap:wrap; gap:4px 12px">
+        <label class="checkline"><input type="checkbox" id="f_genView_top" checked> Top</label>
+        <label class="checkline"><input type="checkbox" id="f_genView_front" checked> Front</label>
+        <label class="checkline"><input type="checkbox" id="f_genView_side" checked> Side</label>
+        <label class="checkline"><input type="checkbox" id="f_genView_bottom" checked> Bottom</label>
+        <label class="checkline"><input type="checkbox" id="f_genView_back" checked> Back</label>
+      </div>
+      <button type="button" id="btnGenerateViews" class="secondary-btn">🎨 צור תצוגות נבחרות עם AI (GPT)</button>
       <div id="genStatus" class="hint" style="margin-top:6px"></div>
       <button type="button" id="btnShowPrompt" class="secondary-btn">👁 הצג את הפרומפט המדויק שיישלח</button>
       <textarea id="promptPreview" rows="10" readonly style="display:none; margin-top:6px; font-size:.68rem; font-family:monospace; direction:ltr; text-align:left"></textarea>

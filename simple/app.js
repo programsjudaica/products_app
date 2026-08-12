@@ -251,31 +251,68 @@ async function regenerateSingleView(){
   }
 }
 
+const generatableViewKeys = ['top', 'front', 'side', 'bottom', 'back'];
+
 async function generateViews(){
   const status = document.getElementById('genStatus');
   if(refImages.length === 0){
     status.textContent = 'קודם צריך להעלות לפחות תמונת רפרנס אחת.';
     return;
   }
-  status.textContent = '🎨 יוצר 6 תצוגות עם AI... זה יכול לקחת כ-20-40 שניות.';
-  try {
-    const resp = await fetch('/api/generate-views', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ images: refImages, prompt: buildGenerationPrompt() })
-    });
-    if(!resp.ok){
-      let errMsg = resp.status;
-      try { const err = await resp.json(); if(err.error) errMsg = err.error; } catch(e){}
-      status.textContent = `יצירת התמונות נכשלה (${errMsg}).`;
-      return;
+  const selectedKeys = generatableViewKeys.filter(k => document.getElementById('f_genView_' + k).checked);
+  if(selectedKeys.length === 0){
+    status.textContent = 'צריך לבחור לפחות תצוגה אחת ליצירה.';
+    return;
+  }
+
+  if(selectedKeys.length === generatableViewKeys.length){
+    // all 5 selected - use the combined grid, which keeps the views consistent with each other
+    status.textContent = '🎨 יוצר 6 תצוגות עם AI... זה יכול לקחת כ-20-40 שניות.';
+    try {
+      const resp = await fetch('/api/generate-views', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ images: refImages, prompt: buildGenerationPrompt() })
+      });
+      if(!resp.ok){
+        let errMsg = resp.status;
+        try { const err = await resp.json(); if(err.error) errMsg = err.error; } catch(e){}
+        status.textContent = `יצירת התמונות נכשלה (${errMsg}).`;
+        return;
+      }
+      const data = await resp.json();
+      const split = await splitGridImage(data.image);
+      if(!split){ status.textContent = 'לא הצלחתי לפצל את התמונה שהתקבלה.'; return; }
+      viewImages = split;
+      status.textContent = '✅ 6 התצוגות נוצרו. אפשר ללחוץ על כל תצוגה כדי להוסיף קווי מידה (שתי נקודות + מספר אמיתי).';
+      render();
+    } catch(e){
+      status.textContent = 'יצירת התמונות נכשלה (השרת עדיין לא מחובר / אין מפתח API).';
     }
-    const data = await resp.json();
-    const split = await splitGridImage(data.image);
-    if(!split){ status.textContent = 'לא הצלחתי לפצל את התמונה שהתקבלה.'; return; }
-    viewImages = split;
-    status.textContent = '✅ 6 התצוגות נוצרו. אפשר ללחוץ על כל תצוגה כדי להוסיף קווי מידה (שתי נקודות + מספר אמיתי).';
-    render();
+    return;
+  }
+
+  // partial selection - generate just the chosen views, one at a time (same path as "regenerate single view")
+  status.textContent = `🎨 יוצר ${selectedKeys.length} תצוגות נבחרות עם AI...`;
+  try {
+    for(const key of selectedKeys){
+      const viewLabel = singleViewLabels[key];
+      const resp = await fetch('/api/generate-views', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ images: refImages, prompt: buildSingleViewPrompt(viewLabel, viewNotes[key] || '', false) })
+      });
+      if(!resp.ok){
+        let errMsg = resp.status;
+        try { const err = await resp.json(); if(err.error) errMsg = err.error; } catch(e){}
+        status.textContent = `יצירת ${viewLabel} נכשלה (${errMsg}) - ממשיכה לתצוגות הבאות.`;
+        continue;
+      }
+      const data = await resp.json();
+      viewImages[key] = data.image;
+      render();
+    }
+    status.textContent = '✅ נוצרו התצוגות הנבחרות. אפשר ללחוץ על כל תצוגה כדי להוסיף קווי מידה (שתי נקודות + מספר אמיתי).';
   } catch(e){
     status.textContent = 'יצירת התמונות נכשלה (השרת עדיין לא מחובר / אין מפתח API).';
   }
