@@ -70,15 +70,17 @@ textarea{resize:vertical}
 /* ---------- preview ---------- */
 .preview-wrap{flex:1; overflow:auto; padding:30px; display:flex; justify-content:center; align-items:flex-start}
 .spec-sheet{
-  width:297mm; min-height:210mm; background:#fff;
+  width:297mm; height:210mm; background:#fff;
   box-shadow:0 4px 20px rgba(0,0,0,.15); padding:12mm 14mm;
   font-family:'Assistant', sans-serif;
-  position:relative;
 }
 
 /* ---------- free-form worksheet layout ---------- */
 /* every box on the sheet is absolutely positioned per its saved layout%, draggable by its
-   label/header (.box-handle) and resizable via a corner handle - a real work surface */
+   label/header (.box-handle) and resizable via a corner handle - a real work surface.
+   Boxes live inside .sheet-canvas (not .spec-sheet directly) so their 0-100% coordinate
+   space is the sheet's PADDED content area, not its bleed-to-the-edge outer box. */
+.sheet-canvas{ position:relative; width:100%; height:100% }
 .free-box{ position:absolute; box-sizing:border-box; overflow:auto }
 .box-handle{ cursor:move; user-select:none }
 .box-resize-handle{
@@ -170,7 +172,7 @@ textarea{resize:vertical}
   body{background:#fff}
   .panel{display:none}
   .preview-wrap{padding:0; display:block}
-  .spec-sheet{box-shadow:none; width:100%; min-height:auto}
+  .spec-sheet{box-shadow:none; width:100%; height:auto}
   .view-canvas{cursor:default}
   .dim-remove-x{display:none}
   .vector-graphic-overlay.active{outline:none}

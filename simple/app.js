@@ -689,7 +689,7 @@ function resetLayout(){
    buildSkeleton() - the wrapper element itself persists across render() calls (only its
    inner content gets rebuilt), so these listeners never need re-attaching. */
 function wireFreeBox(boxEl, boxId){
-  const sheet = document.getElementById('specSheet');
+  const sheet = document.getElementById('sheetCanvas');
   const handle = boxEl.querySelector('.box-handle') || boxEl;
 
   handle.addEventListener('mousedown', (e) => {
@@ -772,7 +772,7 @@ function boxInnerHtml(def){
 function buildSkeleton(){
   if(!layout) layout = cloneDefaultLayout();
   const sheet = document.getElementById('specSheet');
-  sheet.innerHTML = boxDefs.map(def => {
+  const boxesHtml = boxDefs.map(def => {
     const pos = layout[def.id];
     const extraClass = def.id === 'header' ? 'header-box' : def.id === 'footer' ? 'footer-box' : def.viewKey ? 'view-box' : def.id.replace(/_/g,'-');
     return `<div class="free-box ${extraClass}" id="box-${def.id}" style="left:${pos.xPct}%; top:${pos.yPct}%; width:${pos.wPct}%; height:${pos.hPct}%">
@@ -780,6 +780,7 @@ function buildSkeleton(){
       <div class="box-resize-handle"></div>
     </div>`;
   }).join('');
+  sheet.innerHTML = `<div id="sheetCanvas" class="sheet-canvas">${boxesHtml}</div>`;
 
   boxDefs.forEach(def => wireFreeBox(document.getElementById('box-'+def.id), def.id));
 
